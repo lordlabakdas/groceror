@@ -1,8 +1,10 @@
-from flask import Blueprint,jsonify
+from flask import Blueprint, Response, request, jsonify
 import googlemaps
 from conf.config import Config
 import requests
 from pprint import pprint
+from flask_api import status as HTTP_STATUS_CODE
+
 
 owner_apis = Blueprint("owner_apis", __name__)
 
@@ -24,6 +26,7 @@ def nearby_groceries():
         "https://maps.googleapis.com/maps/api/place/nearbysearch/json", params=params)
     pprint(response.json(), stream=None, indent=2, width=80, depth=None)
     return jsonify(response.json())
+
 
 @owner_apis.route("/modify-price", methods=["POST"])
 def modify_price():

@@ -6,7 +6,7 @@ from pprint import pprint
 from flask_api import status as HTTP_STATUS_CODE
 
 
-owner_apis = Blueprint("owner_apis", __name__)
+owner_apis = Blueprint("owner_apis", __name__,url_prefix='/owner')
 
 gmaps = googlemaps.Client(key=Config.google_maps_api_key)
 
@@ -15,6 +15,15 @@ gmaps = googlemaps.Client(key=Config.google_maps_api_key)
 def home():
     return "owner apis"
 
+owner_apis.route("/register", methods=["POST"])
+def register():
+    return Response(
+        response="Inventory added",
+        status=HTTP_STATUS_CODE.HTTP_200_OK,
+        mimetype="application/json",
+    )
+
+owner_apis.route("/login")
 
 @owner_apis.route("/nearby-stores")
 def nearby_groceries():
@@ -47,3 +56,4 @@ def add_inventory():
         status=HTTP_STATUS_CODE.HTTP_200_OK,
         mimetype="application/json",
     )
+

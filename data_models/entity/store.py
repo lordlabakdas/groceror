@@ -8,7 +8,6 @@ class Store(Base):
     name = Column(String(80), nullable=False)
     description = Column(String(255), nullable=True)
     location = Column(String(80), nullable=False)
-    store_owner = Column(Integer, nullable=False)
 
     def get_id(self):
         return self.id

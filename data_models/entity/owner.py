@@ -14,3 +14,21 @@ class Owner(Base):
     prev_password = Column(String)
     store_id = Column(Integer, ForeignKey('store.id'))
     otp = Column(String)
+
+    def get_username(self):
+        return self.username
+
+    def set_username(self, username):
+        self.username = username
+    
+    def get_email(self):
+        return self.email
+
+    def set_email(self, email):
+        self.email = email
+
+    def get_location(self):
+        return self.name
+
+    def set_location(self, name):
+        self.name = name

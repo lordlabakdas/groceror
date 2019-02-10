@@ -18,3 +18,8 @@ class OwnerRegistration(object):
         db_session.add(new_owner)
         db_session.commit()
         db_session.close()
+
+    def retreive_owner_details(self, username):
+        existing_owner_details = Owner.query.filter_by(
+            username=username).first().get_owner_details()
+        return existing_owner_details

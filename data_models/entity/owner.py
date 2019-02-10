@@ -20,7 +20,7 @@ class Owner(Base):
 
     def set_username(self, username):
         self.username = username
-    
+
     def get_email(self):
         return self.email
 
@@ -32,3 +32,11 @@ class Owner(Base):
 
     def set_location(self, name):
         self.name = name
+
+    def get_owner_details(self):
+        owner_details = {"id": self.id,
+                         "first_name": self.first_name,
+                         "last_name": self.last_name,
+                         "email": self.email,
+                         "phone": self.phone}
+        return owner_details

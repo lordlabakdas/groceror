@@ -28,7 +28,24 @@ def register():
 
 @owner_apis.route("/login")
 def login():
-    return "Logged in"
+    if "phone" in request.json:
+        owner_registration_obj = OwnerRegistration()
+        is_owner_registered = owner_registration_obj.check_if_owner_registered(request.json["phone"])
+        if not is_owner_registered:
+            print("User does not exist")
+            return Response(json.dumps({"user_id": None}), status=HTTP_STATUS_CODE.HTTP_403_FORBIDDEN, mimetype='application/json')
+        else:
+            registered_owner_obj = owner_registration_obj.get_registered_user("phone")
+            is_user_authenticated = registered_owner_obj.check_password(request.json["password"])
+            if is_user_authenticated:
+                access_token = create_access_token(identity=registered_owner_obj.id, expires_delta=False)
+                return Response(json.dumps({**registered_owner_obj.get_user_profile(), **{"access_token": access_token}}), status=HTTP_STATUS_CODE.HTTP_200_OK, mimetype='application/json')
+            else:
+                print("Password is incorrect")
+                return Response(json.dumps({"user_id": None}), status=HTTP_STATUS_CODE.HTTP_403_FORBIDDEN, mimetype='application/json')
+    else:
+        return Response(json.dumps({"user_id": None}), status=HTTP_STATUS_CODE.HTTP_404_NOT_FOUND mimetype='application/json')
+    
 
 # @owner_apis.route("/nearby-stores")
 # def nearby_groceries():

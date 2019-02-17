@@ -13,7 +13,7 @@ owner.register_blueprint(owner_apis)
 
 @owner.route("/")
 def welcome():
-    return "Welcome to Grocerer!"
+    return "Welcome to Groceror!"
 
 
 if __name__ == "__main__":

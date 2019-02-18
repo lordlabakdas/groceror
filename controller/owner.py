@@ -35,7 +35,7 @@ def login():
             print("User does not exist")
             return Response(json.dumps({"user_id": None}), status=HTTP_STATUS_CODE.HTTP_403_FORBIDDEN, mimetype='application/json')
         else:
-            registered_owner_obj = owner_registration_obj.get_registered_user("phone")
+            registered_owner_obj = owner_registration_obj.get_registered_user(request.json["phone"])
             is_user_authenticated = registered_owner_obj.check_password(request.json["password"])
             if is_user_authenticated:
                 access_token = create_access_token(identity=registered_owner_obj.id, expires_delta=False)
@@ -45,7 +45,7 @@ def login():
                 return Response(json.dumps({"user_id": None}), status=HTTP_STATUS_CODE.HTTP_403_FORBIDDEN, mimetype='application/json')
     else:
         return Response(json.dumps({"user_id": None}), status=HTTP_STATUS_CODE.HTTP_404_NOT_FOUND mimetype='application/json')
-    
+
 
 # @owner_apis.route("/nearby-stores")
 # def nearby_groceries():

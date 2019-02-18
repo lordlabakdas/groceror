@@ -23,3 +23,13 @@ class OwnerRegistration(object):
         existing_owner_details = Owner.query.filter_by(
             username=username).first().get_owner_details()
         return existing_owner_details
+
+    def check_if_owner_registered(self, phone):
+        owner = self.get_registered_user(phone)
+        if owner is None:
+            return False
+        else:
+            return True
+
+    def get_registered_user(self, phone):
+        return Owner.query.filter_by(phone=phone).first()

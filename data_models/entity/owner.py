@@ -1,5 +1,6 @@
 from sqlalchemy import Column, Integer, String, ForeignKey
 from data_models.db import Base
+from werkzeug.security import generate_password_hash, check_password_hash
 
 
 class Owner(Base):
@@ -33,6 +34,12 @@ class Owner(Base):
     def set_location(self, name):
         self.name = name
 
+    def set_password(self, plain_text_password):
+        self.password = generate_password_hash(plain_text_password)
+
+    def check_password(self, plain_text_password):
+        return check_password_hash(self.password, plain_text_password)
+        
     def get_owner_details(self):
         owner_details = {"id": self.id,
                          "first_name": self.first_name,

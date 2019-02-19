@@ -3,6 +3,7 @@ import googlemaps
 from conf.config import Config
 from flask_api import status as HTTP_STATUS_CODE
 from data_models.service.owner_registration import OwnerRegistration
+from flask_jwt_extended import jwt_required, create_access_token, get_jwt_identity
 
 owner_apis = Blueprint("owner_apis", __name__, url_prefix='/owner')
 

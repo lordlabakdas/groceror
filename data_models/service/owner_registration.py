@@ -1,6 +1,6 @@
 from data_models.entity.owner import Owner
 from data_models.db import db_session
-
+from werkzeug.security import generate_password_hash
 
 class OwnerRegistration(object):
 
@@ -9,7 +9,7 @@ class OwnerRegistration(object):
             email=new_owner_information["email"],
             phone=new_owner_information["phone"],
             username=new_owner_information["username"],
-            password=new_owner_information["password"],
+            password=generate_password_hash(new_owner_information["password"]),
             first_name=None if "first_name" not in new_owner_information else new_owner_information[
                 "first_name"],
             last_name=None if "first_name" not in new_owner_information else new_owner_information[

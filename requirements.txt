@@ -1,5 +1,4 @@
-googlemap
-Flask==1.0.2
+Flask
 urllib3
 requests
 

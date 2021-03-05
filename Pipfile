@@ -1,0 +1,15 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+googlemaps = "==3.0.2"
+requests = "==2.19.1"
+Flask = "==1.0.2"
+pip = "*"
+
+[dev-packages]
+
+[requires]
+python_version = "3.9"

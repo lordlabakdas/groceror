@@ -1,9 +1,14 @@
+import json
+
 from flask import Blueprint, Response, request
-import googlemaps
-from conf.config import Config
-from flask_api import status as HTTP_STATUS_CODE
-from data_models.service.owner_registration import OwnerRegistration
 from flask_jwt_extended import jwt_required, create_access_token, get_jwt_identity
+from flask_api import status as HTTP_STATUS_CODE
+
+import googlemaps
+
+from conf.config import Config
+from data_models.service.owner_registration import OwnerRegistration
+
 
 owner_apis = Blueprint("owner_apis", __name__, url_prefix='/owner')
 
@@ -45,7 +50,7 @@ def login():
                 print("Password is incorrect")
                 return Response(json.dumps({"user_id": None}), status=HTTP_STATUS_CODE.HTTP_403_FORBIDDEN, mimetype='application/json')
     else:
-        return Response(json.dumps({"user_id": None}), status=HTTP_STATUS_CODE.HTTP_404_NOT_FOUND mimetype='application/json')
+        return Response(json.dumps({"user_id": None}), status=HTTP_STATUS_CODE.HTTP_404_NOT_FOUND, mimetype='application/json')
 
 
 # @owner_apis.route("/nearby-stores")

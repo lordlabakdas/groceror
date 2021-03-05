@@ -5,7 +5,7 @@ name = "pypi"
 
 [packages]
 googlemaps = "==3.0.2"
-requests = "==2.19.1"
+requests = "==2.20.0"
 Flask = "==1.0.2"
 pip = "*"
 

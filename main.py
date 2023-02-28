@@ -1,21 +1,25 @@
-from flask import Flask, request, jsonify
-from controller.owner import owner_apis
-from configparser import ConfigParser
+import logging
+
+import uvicorn
+from fastapi import FastAPI
+
+from api.user import user_apis
+from config import LogConfig
+
+logging.config.dictConfig(LogConfig().dict())
+logger = logging.getLogger("groceror")
+
+app = FastAPI(debug=False)
+app.logger = logger
 
 
-owner = Flask(__name__)
-
-# owner.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-# owner.config['SQLALCHEMY_DATABASE_URI'] = "mysql+pymysql://" + DB_USERNAME + ":" + DB_PASSWORD + "@" + DB_HOST + "/" + DB_DATABASE
-
-owner.register_blueprint(owner_apis)
-
-
-@owner.route("/")
-def welcome():
+@app.get("/")
+async def welcome():
+    logger.info("Welcome to Groceror!")
     return "Welcome to Groceror!"
 
 
+app.mount("/user", user_apis)
+
 if __name__ == "__main__":
-    owner.debug = True
-    owner.run(host="127.0.0.1", port=5000)
+    uvicorn.run(app, port=8009)

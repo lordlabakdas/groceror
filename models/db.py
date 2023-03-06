@@ -1,4 +1,5 @@
 from sqlmodel import Session, SQLModel, create_engine
+
 from config import DBConfig
 
 engine = create_engine(DBConfig.DATABASE_URL, echo=True)

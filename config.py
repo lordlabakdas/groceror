@@ -1,8 +1,9 @@
+from dotenv import load_dotenv
 from pydantic import BaseModel
 
-from dotenv import load_dotenv
-
 ENV_VARS = load_dotenv()
+
+
 class LogConfig(BaseModel):
     """Logging configuration to be set for the server"""
 
@@ -41,4 +42,3 @@ class DBConfig(object):
     DB_PORT = ENV_VARS.get("DB_PORT")
     DB_NAME = ENV_VARS.get("DB_NAME")
     DB_URL = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
-

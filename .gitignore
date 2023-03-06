@@ -10,3 +10,7 @@
 *.out
 venv/
 *.db
+.env
+__pycache__
+.idea
+.ruff_cache

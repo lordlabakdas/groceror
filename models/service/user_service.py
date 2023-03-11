@@ -1,6 +1,6 @@
 import uuid
 
-from models.entity.userentity import User
+from models.entity.user_entity import User
 
 
 class UserService(object):

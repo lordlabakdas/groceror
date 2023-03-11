@@ -3,7 +3,7 @@ import logging
 import uvicorn
 from fastapi import FastAPI
 
-from api.user import user_apis
+from api.user_api import user_apis
 from config import LogConfig
 from models.db import create_db_and_tables
 

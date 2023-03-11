@@ -1,13 +1,18 @@
 import logging
+from typing import Dict
 import uuid
 
 import bcrypt
-import jwt
+from fastapi import Depends, HTTPException
+from helpers.jwt import JWT
 import sqlalchemy
+from fastapi.security import JWTAuthentication, OAuth2PasswordBearer
 
 from helpers.exceptions import GrocerorError
 from models.db import db_session
 from models.entity.user_entity import User
+from config import JWTConfig
+from helpers.jwt import JWT
 
 logger = logging.getLogger()
 
@@ -42,7 +47,7 @@ class UserService(object):
         finally:
             db_session.close()
 
-    def login(self, login_payload):
+    def login(self, login_payload) -> Dict[str]:
         try:
             user_obj = (
                 db_session.query(User).filter_by(email=login_payload["email"]).first()
@@ -59,14 +64,18 @@ class UserService(object):
             if bcrypt.checkpw(
                 login_payload["password"].encode("utf-8"), user_obj.password
             ):
-                raise NotImplementedError
+                jwt_obj = JWT()
+                token = jwt_obj.create_token(
+                    payload={"id": user_obj.id, "email": user_obj.email}
+                )
+                return {"access_token": token}
             else:
                 logger.critical(
                     f"Passwords do not match for user {login_payload['email']}"
                 )
-            raise UserServiceError(
-                action="login",
-                message=f"Passwords do not match for user {login_payload['email']}",
-            )
+                raise UserServiceError(
+                    action="login",
+                    message=f"Passwords do not match for user {login_payload['email']}",
+                )
         finally:
             db_session.close()

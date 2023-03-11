@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from dotenv import load_dotenv
 from pydantic import BaseModel
 
@@ -33,6 +34,7 @@ class LogConfig(BaseModel):
     }
 
 
+@dataclass
 class DBConfig(object):
     """Database configuration to be set for the server"""
 
@@ -42,3 +44,11 @@ class DBConfig(object):
     DB_PORT = ENV_VARS.get("DB_PORT")
     DB_NAME = ENV_VARS.get("DB_NAME")
     DB_URL = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+
+
+@dataclass
+class JWTConfig(object):
+    """JWT related configuration"""
+
+    JWT_ALGORITHM = ENV_VARS.get("JWT_ALGORITHM")
+    JWT_SECRET_KEY = ENV_VARS.get("JWT_SECRET_KEY")

@@ -1,12 +1,18 @@
 import logging
 
 from fastapi import FastAPI
+from fastapi.security import JWTAuthentication, OAuth2PasswordBearer
+from fastapi import Depends, HTTPException
 
-from api.validators.user_validation import (ChangePasswordPayload,
-                                            ChangePasswordResponse,
-                                            LoginPayload, LoginResponse,
-                                            RegistrationPayload,
-                                            RegistrationResponse)
+from api.validators.user_validation import (
+    ChangePasswordPayload,
+    ChangePasswordResponse,
+    LoginPayload,
+    LoginResponse,
+    RegistrationPayload,
+    RegistrationResponse,
+)
+from helpers.jwt import JWT
 from models.service.user_service import User
 
 logger = logging.getLogger("groceror")
@@ -29,7 +35,7 @@ async def login(login_payload: LoginPayload):
     return {"id": user_id}
 
 
-@user_apis.put("changepassword", response_model=ChangePasswordResponse)
+@user_apis.put("change-password", response_model=ChangePasswordResponse)
 async def change_password(change_password_payload: ChangePasswordPayload):
     logger.info(f"Changing password for user with payload: {change_password_payload}")
     user_change_password_obj = User()
@@ -38,8 +44,11 @@ async def change_password(change_password_payload: ChangePasswordPayload):
 
 
 @user_apis.get("/logout")
-async def logout():
-    logger.info("Logging out user")
-    user_logout_obj = User()
-    user_logout_obj.logout()
-    return {"status": "success"}
+def logout(
+    token: str = Depends(OAuth2PasswordBearer(tokenUrl="token"))
+):
+    jwt_obj = JWT()
+    payload = jwt_obj.decode_token(token=token)
+    if payload is None:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    return {"detail": "Logout successful"}

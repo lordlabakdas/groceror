@@ -3,10 +3,10 @@ import logging
 from fastapi import FastAPI
 
 from api.validators.user_validation import (ChangePasswordPayload,
-                                           ChangePasswordResponse,
-                                           LoginPayload, LoginResponse,
-                                           RegistrationPayload,
-                                           RegistrationResponse)
+                                            ChangePasswordResponse,
+                                            LoginPayload, LoginResponse,
+                                            RegistrationPayload,
+                                            RegistrationResponse)
 from models.service.user_service import User
 
 logger = logging.getLogger("groceror")

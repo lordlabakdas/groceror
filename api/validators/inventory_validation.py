@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import List, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, validator
@@ -23,3 +23,14 @@ class AddInventoryPayload(BaseModel):
 
 class AddInventoryResponse(BaseModel):
     inventory_id: UUID
+
+
+class StoreInventory(BaseModel):
+    email: str
+    name: str  # TODO distinguish between user name and inventory name
+    address: str
+    quantity: int
+
+
+class StoreInventoryResponse(BaseModel):
+    inventory: List[StoreInventory]

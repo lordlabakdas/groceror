@@ -1,18 +1,14 @@
 import logging
-from typing import Dict
 import uuid
+from typing import Dict
 
 import bcrypt
-from fastapi import Depends, HTTPException
-from helpers.jwt import JWT
 import sqlalchemy
-from fastapi.security import JWTAuthentication, OAuth2PasswordBearer
 
 from helpers.exceptions import GrocerorError
+from helpers.jwt import JWT
 from models.db import db_session
 from models.entity.user_entity import User
-from config import JWTConfig
-from helpers.jwt import JWT
 
 logger = logging.getLogger()
 
@@ -79,3 +75,7 @@ class UserService(object):
                 )
         finally:
             db_session.close()
+
+    def get_user_by_email(self, email: str) -> User:
+        user_obj = db_session.query(User).filter_by(email=email).first()
+        return user_obj

@@ -3,6 +3,7 @@ import logging
 import uvicorn
 from fastapi import FastAPI
 
+from api.inventory_api import inventory_apis
 from api.user_api import user_apis
 from config import LogConfig
 from models.db import create_db_and_tables
@@ -21,6 +22,8 @@ async def welcome():
 
 
 app.mount("/user", user_apis)
+app.mount("/inventory", inventory_apis)
+
 create_db_and_tables()
 
 if __name__ == "__main__":

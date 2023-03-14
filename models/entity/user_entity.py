@@ -1,7 +1,8 @@
+import datetime
 from typing import Optional
 from uuid import UUID
 
-from sqlmodel import Field, SQLModel
+from sqlmodel import Column, Field, SQLModel
 
 
 class User(SQLModel, table=True):
@@ -12,3 +13,8 @@ class User(SQLModel, table=True):
     entity_type: str
     username: str
     password: str
+    created_at: datetime = Column(nullable=False, default=datetime.datetime.utcnow)
+    updated_at: datetime = Column(
+        nullable=False, default=datetime.utcnow, onupdate=datetime.datetime.utcnow
+    )
+    location: str

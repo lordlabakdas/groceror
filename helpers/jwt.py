@@ -47,7 +47,7 @@ class JWT(object):
         self.algorithm = JWTConfig.JWT_ALGORITHM
         self.secret_key = JWTConfig.JWT_SECRET_KEY
 
-    def create_token(self, payload: str) -> Dict[str]:
+    def create_token(self, payload: str) -> Dict:
         return jwt.encode(
             payload=payload, key=self.secret_key, algorithm=self.algorithm
         )

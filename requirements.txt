@@ -5,3 +5,7 @@ sqlmodel==0.0.8
 black==23.1.0
 isort==5.12.0
 python-dotenv==1.0.0
+google-auth==2.16.3
+google-auth-oauthlib==1.0.0
+firebase-admin==6.1.0
+psycopg2==2.9.5

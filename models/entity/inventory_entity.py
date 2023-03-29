@@ -20,7 +20,6 @@ class Inventory(SQLModel, table=True):
     name: str
     quantity: int
     category: Optional[str] = None
-    user_id: int = Field(foreign_key="user.id")
     timestamp: datetime = Field(default_factory=datetime.utcnow)
     notes: Optional[str] = None
     user: Optional["User"] = Relationship(back_populates="inventory")

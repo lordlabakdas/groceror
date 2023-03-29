@@ -2,6 +2,8 @@ import logging
 
 import uvicorn
 from fastapi import FastAPI
+import firebase_admin
+from firebase_admin import credentials
 
 from api.inventory_api import inventory_apis
 from api.user_api import user_apis
@@ -13,6 +15,9 @@ logger = logging.getLogger("groceror")
 
 app = FastAPI(debug=False)
 app.logger = logger
+
+cred = credentials.Certificate("firebase_service_account.json")
+firebase_admin.initialize_app(cred)
 
 
 @app.get("/")

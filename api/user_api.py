@@ -13,7 +13,6 @@ from api.validators.user_validation import (
 )
 from helpers.jwt import JWT, oauth2_scheme
 from models.service.user_service import User
-from pydantic import BaseModel
 from google.oauth2 import id_token
 
 
@@ -40,24 +39,13 @@ async def register(registration_payload: RegistrationPayload):
 @user_apis.post("/login", response_model=LoginResponse)
 async def login(login_payload: LoginPayload):
     logger.info(f"Logging in user with payload: {login_payload,dict()}")
-    # try:
-    #     user_login_obj = User()
-    #     user_id = user_login_obj.login(login_payload)
-    # except Exception as e:
-    #     logger.exception(f"Error while logging in user with exception details {e}")
-    #     raise HTTPException(
-    #         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-    #         detail="Issue with logging user",
-    #     )
-    # else:
-    #     return {"id": user_id}
     try:
         user = auth.get_user_by_email(email=login_payload.email)
         if not user:
             return {"success": False}
         auth_user = auth.authenticate(**login_payload.dict())
         if auth_user:
-            return {"user_id": auth_user.uid}
+            return {"token": auth.crete_custom_token(auth_user.uid)}
         else:
             # User is not authenticated
             raise HTTPException(

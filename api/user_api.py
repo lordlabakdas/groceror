@@ -1,31 +1,27 @@
 import logging
 
-from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, status
 from firebase_admin import auth
-
-from api.validators.user_validation import (
-    ChangePasswordPayload,
-    ChangePasswordResponse,
-    LoginPayload,
-    LoginResponse,
-    RegistrationPayload,
-    RegistrationResponse,
-)
-from helpers.jwt import JWT, oauth2_scheme
-from models.service.user_service import User
 from google.oauth2 import id_token
 
+from api.helpers import auth_helper
+from api.validators.user_validation import (ChangePasswordPayload,
+                                            ChangePasswordResponse,
+                                            LoginPayload, LoginResponse,
+                                            RegistrationPayload,
+                                            RegistrationResponse)
+from helpers.jwt import JWT, oauth2_scheme
+from models.service.user_service import User
 
 logger = logging.getLogger("groceror")
-user_apis = FastAPI()
+user_apis = APIRouter()
 
 
 @user_apis.post("/register", response_model=RegistrationResponse)
 async def register(registration_payload: RegistrationPayload):
     logger.info(f"Registering user with payload: {registration_payload}")
     try:
-        user_registration_obj = User()
-        new_user_id = user_registration_obj.register(**registration_payload.dict())
+        new_user = auth_helper.register(**registration_payload.dict())
     except Exception as e:
         logger.exception(f"Error while registering user with exception details {e}")
         raise HTTPException(
@@ -33,7 +29,7 @@ async def register(registration_payload: RegistrationPayload):
             detail="Issue with registering user",
         )
     else:
-        return {"id": new_user_id}
+        return {"id": new_user.id}
 
 
 @user_apis.post("/login", response_model=LoginResponse)

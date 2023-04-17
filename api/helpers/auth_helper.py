@@ -1,5 +1,8 @@
-from google.oauth2 import id_token
 from google.auth.transport import requests
+from google.oauth2 import id_token
+
+from models.db import db_session
+from models.entity.user_entity import User
 
 
 def validate_google_token(token, client_id):
@@ -14,3 +17,34 @@ def validate_google_token(token, client_id):
     except ValueError as e:
         # Invalid token
         return None
+
+
+def register(
+    name: str, email: str, address: str, entity_type: str, username: str, password: str
+):
+    user = User(
+        name=name,
+        email=email,
+        address=address,
+        entity_type=entity_type,
+        username=username,
+        password=password,
+    )
+    db_session.add(user)
+    db_session.commit()
+    return user
+
+
+def get_user_by_email(email: str):
+    user = db.session.query(User).filter(User.email == email).first()
+    return user
+
+
+def get_user_by_id(user_id: str):
+    user = db.session.query(User).filter(User.id == user_id).first()
+    return user
+
+
+def get_user_by_username(username: str):
+    user = db.session.query(User).filter(User.username == username).first()
+    return user

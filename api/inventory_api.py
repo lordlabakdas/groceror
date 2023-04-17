@@ -1,19 +1,17 @@
 import logging
 from typing import List
 
-from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, status
 
 from api.helpers.inventory_helper import InventoryHelper
-from api.validators.inventory_validation import (
-    AddInventoryPayload,
-    AddInventoryResponse,
-    StoreInventoryResponse,
-)
+from api.validators.inventory_validation import (AddInventoryPayload,
+                                                 AddInventoryResponse,
+                                                 StoreInventoryResponse)
 from helpers.jwt import auth_required
 from models.entity.user_entity import User
 
 logger = logging.getLogger("groceror")
-inventory_apis = FastAPI()
+inventory_apis = APIRouter()
 
 
 @inventory_apis.post("/add-inventory", response_model=AddInventoryResponse)

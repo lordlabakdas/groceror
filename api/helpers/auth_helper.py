@@ -3,7 +3,7 @@ from google.oauth2 import id_token
 
 from models.db import db_session
 from models.entity.user_entity import User
-
+from passlib.context import CryptContext
 
 def validate_google_token(token, client_id):
     try:
@@ -28,7 +28,7 @@ def register(
         address=address,
         entity_type=entity_type,
         username=username,
-        password=password,
+        password=hash_password(password),
     )
     db_session.add(user)
     db_session.commit()
@@ -36,15 +36,27 @@ def register(
 
 
 def get_user_by_email(email: str):
-    user = db.session.query(User).filter(User.email == email).first()
+    user = db_session.query(User).filter(User.email == email).first()
     return user
 
 
 def get_user_by_id(user_id: str):
-    user = db.session.query(User).filter(User.id == user_id).first()
+    user = db_session.query(User).filter(User.id == user_id).first()
     return user
 
 
 def get_user_by_username(username: str):
-    user = db.session.query(User).filter(User.username == username).first()
+    user = db_session.query(User).filter(User.username == username).first()
     return user
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+def hash_password(password: str) -> str:
+    return pwd_context.hash(password)
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    return pwd_context.verify(plain_password, hashed_password)
+
+def check_user_exists(username: str) -> bool:
+    user = get_user_by_username(username)
+    return user is not None

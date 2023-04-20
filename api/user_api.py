@@ -5,13 +5,17 @@ from firebase_admin import auth
 from google.oauth2 import id_token
 
 from api.helpers import auth_helper
-from api.validators.user_validation import (ChangePasswordPayload,
-                                            ChangePasswordResponse,
-                                            LoginPayload, LoginResponse,
-                                            RegistrationPayload,
-                                            RegistrationResponse)
+from api.validators.user_validation import (
+    ChangePasswordPayload,
+    ChangePasswordResponse,
+    LoginPayload,
+    LoginResponse,
+    RegistrationPayload,
+    RegistrationResponse,
+)
 from helpers.jwt import JWT, oauth2_scheme
 from models.service.user_service import User
+
 
 logger = logging.getLogger("groceror")
 user_apis = APIRouter()
@@ -21,7 +25,13 @@ user_apis = APIRouter()
 async def register(registration_payload: RegistrationPayload):
     logger.info(f"Registering user with payload: {registration_payload}")
     try:
-        new_user = auth_helper.register(**registration_payload.dict())
+        if not auth_helper.is_user_exists(username=registration_payload.username):
+            new_user = auth_helper.register(**registration_payload.dict())
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="User already exists",
+            )
     except Exception as e:
         logger.exception(f"Error while registering user with exception details {e}")
         raise HTTPException(
@@ -34,9 +44,26 @@ async def register(registration_payload: RegistrationPayload):
 
 @user_apis.post("/login", response_model=LoginResponse)
 async def login(login_payload: LoginPayload):
-    logger.info(f"Logging in user with payload: {login_payload,dict()}")
+    logger.info(f"Logging in user with payload: {login_payload.dict()}")
+    user = auth_helper.get_user_by_username(username=login_payload.username)
+    if not user or not auth_helper.verify_password(
+        login_payload.password, user.password
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+        )
+
+    jwt_obj = JWT()
+    access_token = jwt_obj.create_token({"sub": user.username})
+    return {"token": access_token}
+
+
+@user_apis.post("/firebase-login", response_model=LoginResponse)
+async def firebase_login(login_payload: LoginPayload):
+    logger.info(f"Logging in user with payload: {login_payload.dict()}")
     try:
-        user = auth.get_user_by_email(email=login_payload.email)
+        user = auth_helper.get_user_by_username(username=login_payload.username)
         if not user:
             return {"success": False}
         auth_user = auth.authenticate(**login_payload.dict())

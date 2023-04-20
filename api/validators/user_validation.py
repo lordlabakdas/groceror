@@ -22,7 +22,7 @@ class LoginPayload(BaseModel):
 
 
 class LoginResponse(BaseModel):
-    id: UUID
+    token: str
 
 
 class ChangePasswordPayload(BaseModel):

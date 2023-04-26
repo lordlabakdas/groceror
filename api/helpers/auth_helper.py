@@ -57,6 +57,6 @@ def hash_password(password: str) -> str:
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
 
-def check_user_exists(username: str) -> bool:
+def is_user_exists(username: str) -> bool:
     user = get_user_by_username(username)
     return user is not None

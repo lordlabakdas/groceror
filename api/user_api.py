@@ -1,15 +1,19 @@
 import logging
 
-from fastapi import APIRouter, Depends, FastAPI, HTTPException, status
-from firebase_admin import auth
+from fastapi import APIRouter, Depends, HTTPException, status
+from firebase_admin import auth as firebase_auth
 from google.oauth2 import id_token
 
 from api.helpers import auth_helper
 from api.validators.user_validation import (
     ChangePasswordPayload,
     ChangePasswordResponse,
+    FirebaseRegistrationPayload,
+    FirebaseRegistrationResponse,
     LoginPayload,
     LoginResponse,
+    FirebaseLoginPayload,
+    FirebaseLoginResponse,
     RegistrationPayload,
     RegistrationResponse,
 )
@@ -59,26 +63,37 @@ async def login(login_payload: LoginPayload):
     return {"token": access_token}
 
 
-@user_apis.post("/firebase-login", response_model=LoginResponse)
-async def firebase_login(login_payload: LoginPayload):
+@user_apis.post("/firebase-login", response_model=FirebaseLoginResponse)
+async def firebase_login(login_payload: FirebaseLoginPayload):
     logger.info(f"Logging in user with payload: {login_payload.dict()}")
     try:
-        user = auth_helper.get_user_by_username(username=login_payload.username)
-        if not user:
-            return {"success": False}
-        auth_user = auth.authenticate(**login_payload.dict())
+        auth_user = firebase_auth.authenticate(**login_payload.dict())
         if auth_user:
-            return {"token": auth.crete_custom_token(auth_user.uid)}
+            token = firebase_auth.create_custom_token(auth_user.uid)
         else:
             # User is not authenticated
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials"
             )
-    except auth.AuthError:
+    except firebase_auth.AuthError:
         # Handle authentication error
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials"
         )
+    else:
+        return {"token": token}
+
+@user_apis.post("/firebase-register", response_model=FirebaseRegistrationResponse)
+async def firebase_register(login_payload: FirebaseRegistrationPayload):
+    logger.info(f"Logging in user with payload: {login_payload.dict()}")
+    try:
+        auth_user = firebase_auth.create_user(**login_payload.dict())
+    except firebase_auth.EmailAlreadyExistsError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials"
+        )
+    else:
+        return {"user_id": auth_user.uid}
 
 
 @user_apis.put("change-password", response_model=ChangePasswordResponse)

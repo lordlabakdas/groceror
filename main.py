@@ -30,8 +30,8 @@ app.add_middleware(
 )
 
 
-#cred = credentials.Certificate("firebase_service_account.json")
-#firebase_admin.initialize_app(cred)
+cred = credentials.Certificate("firebase_service_account.json")
+firebase_admin.initialize_app(cred)
 
 
 @app.get("/")

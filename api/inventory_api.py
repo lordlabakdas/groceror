@@ -1,7 +1,7 @@
 import logging
 from typing import List
 
-from fastapi import APIRouter, Depends, FastAPI, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 
 from api.helpers.inventory_helper import InventoryHelper
 from api.validators.inventory_validation import (
@@ -14,7 +14,6 @@ from models.entity.user_entity import User
 
 logger = logging.getLogger("groceror")
 inventory_apis = APIRouter()
-
 
 @inventory_apis.post("/add-inventory", response_model=AddInventoryResponse)
 async def add_inventory(
@@ -34,7 +33,6 @@ async def add_inventory(
         )
     else:
         return {"inventory_id": new_inventory_id}
-
 
 @inventory_apis.post("/get-store-inventory", response_model=StoreInventoryResponse)
 async def get_store_inventory(

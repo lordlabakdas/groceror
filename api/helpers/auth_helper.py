@@ -58,8 +58,8 @@ def hash_password(password: str) -> str:
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
 
-def is_user_exists(username: str) -> bool:
-    user = get_user_by_username(username)
+def is_user_exists(email: str) -> bool:
+    user = get_user_by_email(email)
     return user is not None
 
 def register_firebase_user(email: str, password: str):

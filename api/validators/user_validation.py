@@ -22,7 +22,7 @@ class FirebaseRegistrationPayload(BaseModel):
 class FirebaseRegistrationResponse(BaseModel):
     user_id: str
 class LoginPayload(BaseModel):
-    username: str
+    email: str
     password: str
 
 class LoginResponse(BaseModel):

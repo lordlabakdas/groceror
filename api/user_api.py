@@ -29,7 +29,7 @@ user_apis = APIRouter()
 async def register(registration_payload: RegistrationPayload):
     logger.info(f"Registering user with payload: {registration_payload}")
     try:
-        if not auth_helper.is_user_exists(username=registration_payload.username):
+        if not auth_helper.is_user_exists(email=registration_payload.email):
             new_user = auth_helper.register(**registration_payload.dict())
         else:
             raise HTTPException(
@@ -49,7 +49,8 @@ async def register(registration_payload: RegistrationPayload):
 @user_apis.post("/login", response_model=LoginResponse)
 async def login(login_payload: LoginPayload):
     logger.info(f"Logging in user with payload: {login_payload.dict()}")
-    user = auth_helper.get_user_by_username(username=login_payload.username)
+
+    user = auth_helper.get_user_by_email(email=login_payload.email)
     if not user or not auth_helper.verify_password(
         login_payload.password, user.password
     ):
@@ -114,6 +115,15 @@ def logout(token: str = Depends(oauth2_scheme)):
         )
     return {"detail": "Logout successful"}
 
+@user_apis.post("/firebase-logout")
+async def firebase_logout(token: str):
+    try:
+        decoded_token = firebase_auth.verify_id_token(token)
+        uid = decoded_token['uid']
+        firebase_auth.revoke_refresh_tokens(uid)
+        return {"message": "User logged out successfully."}
+    except firebase_auth.InvalidIdTokenError as e:
+        return {"error": str(e)}
 
 @user_apis.post("/google/login")
 async def google_login(token: str):

@@ -3,7 +3,6 @@ from sqlmodel import Session, SQLModel, create_engine
 from config import DBConfig
 
 engine = create_engine(DBConfig.DB_URL, echo=True)
-print(DBConfig.DB_URL)
 db_session = Session(engine)
 
 

@@ -1,6 +1,5 @@
 import logging
 import uuid
-from typing import Dict
 
 import bcrypt
 import sqlalchemy

@@ -15,26 +15,27 @@ class InventoryHelper(object):
         self.user = user
 
     def add_inventory(
-        self, name: str, quantity: int, category: Enum, notes: str = None
+        self, inventory: dict, category: Enum, notes: str = None
     ) -> dict:
         try:
-            inventory_obj = (
-                db_session.query(Inventory)
-                .join(User)
-                .filter(User.id == self.user.id, Inventory.name == name)
-                .first()
-            )
-            if inventory_obj:
-                inventory_obj.quantity += quantity
-            else:
-                inventory_obj = Inventory(
-                    name=name,
-                    quantity=quantity,
-                    category=InventoryCategory(category),
-                    user_id=self.user.id,
-                    notes=notes,
+            for name, quantity in inventory.items():
+                inventory_obj = (
+                    db_session.query(Inventory)
+                    .join(User)
+                    .filter(User.id == self.user.id, Inventory.name == name)
+                    .first()
                 )
-            db_session.add(inventory_obj)
+                if inventory_obj:
+                    inventory_obj.quantity += quantity
+                else:
+                    inventory_obj = Inventory(
+                        name=name,
+                        quantity=quantity,
+                        category=InventoryCategory(category),
+                        user_id=self.user.id,
+                        notes=notes,
+                    )
+                db_session.add(inventory_obj)
             db_session.commit()
             db_session.refresh()
         except Exception as e:

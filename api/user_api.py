@@ -1,6 +1,6 @@
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, HTTPException, status
 
 from api.helpers import auth_helper
 from api.validators.user_validation import (
@@ -11,8 +11,9 @@ from api.validators.user_validation import (
     RegistrationPayload,
     RegistrationResponse,
 )
-from helpers.jwt import JWT, auth_required, oauth2_scheme
+from helpers.jwt import JWT
 from models.service.user_service import User
+from loguru import logger
 
 
 logger = logging.getLogger("groceror")
@@ -66,12 +67,11 @@ async def change_password(change_password_payload: ChangePasswordPayload):
     return {"status": "success"}
 
 
-@user_apis.get("/logout")
-def logout(token: str = Depends(oauth2_scheme, auth_required)):
-    jwt_obj = JWT()
-    payload = jwt_obj.decode_token(token=token)
-    if payload is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token"
-        )
-    return {"detail": "Logout successful"}
+# logger = logging.getLogger(__name__)
+
+# @user_apis.get("/logout")
+# def logout():
+#     logger.info("Logging out user")
+#     flask_login.logout_user()
+#     flask.flash("You have been logged out.")
+#     return {"detail": "Logout successful"}

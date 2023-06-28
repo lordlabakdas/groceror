@@ -57,7 +57,7 @@ async def firebase_login(login_payload: FirebaseLoginPayload):
 @firebase_apis.put("change-password", response_model=ChangePasswordResponse)
 async def change_password(change_password_payload: ChangePasswordPayload):
     logger.info(f"Changing password for user with payload: {change_password_payload}")
-    user_change_password_obj = User()
+    User()
     user_change_password_obj.change_password(change_password_payload)
     return {"status": "success"}
 

@@ -16,7 +16,7 @@ def validate_google_token(token, client_id):
 
         return idinfo
 
-    except ValueError as e:
+    except ValueError:
         # Invalid token
         return None
 

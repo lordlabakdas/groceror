@@ -1,19 +1,26 @@
 import logging
+import sys
 
 import firebase_admin
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from firebase_admin import credentials
-from api import firebase_api
 
 from api.inventory_api import inventory_apis
 from api.user_api import user_apis
 from api.google_login import google_login_apis
-from config import LogConfig
 from models.db import create_db_and_tables
+from loguru import logger
 
-logging.config.dictConfig(LogConfig().dict())
+
+logger.add(
+    sys.stderr, format="{time} {level} {message}", filter="my_module", level="INFO"
+)
+logger.add("file_{time}.log")
+logger.add(
+    sys.stdout, colorize=True, format="<green>{time}</green> <level>{message}</level>"
+)
 logger = logging.getLogger("groceror")
 
 app = FastAPI(debug=False)
@@ -43,7 +50,7 @@ async def welcome():
 
 
 app.include_router(user_apis, prefix="/user")
-app.include_router(firebase_api, prefix="/firebase")
+# app.include_router(firebase_api, prefix="/firebase")
 app.include_router(google_login_apis, prefix="/google")
 app.include_router(inventory_apis, prefix="/inventory")
 

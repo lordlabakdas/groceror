@@ -15,3 +15,4 @@ __pycache__
 .idea
 .ruff_cache
 firebaseconfig.json
+.config.yml

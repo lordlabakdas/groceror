@@ -1,10 +1,7 @@
-import os
 from dataclasses import dataclass
 
-from dotenv import load_dotenv
 from pydantic import BaseModel
-
-load_dotenv()
+import yaml
 
 
 class LogConfig(BaseModel):
@@ -35,22 +32,21 @@ class LogConfig(BaseModel):
         LOGGER_NAME: {"handlers": ["default"], "level": LOG_LEVEL},
     }
 
+CONFIG = yaml.safe_load(open(".config.yml"))
 
 @dataclass
 class DBConfig(object):
     """Database configuration to be set for the server"""
-
-    DB_USER = os.getenv("DB_USER")
-    DB_PASSWORD = os.getenv("DB_PASSWORD")
-    DB_HOST = os.getenv("DB_HOST")
-    DB_PORT = os.getenv("DB_PORT")
-    DB_NAME = os.getenv("DB_NAME")
+    DB_USER = CONFIG.get("groceror").get("db").get("DB_USER")
+    DB_PASSWORD = CONFIG.get("groceror").get("db").get("DB_PASSWORD")
+    DB_HOST = CONFIG.get("groceror").get("db").get("DB_HOST")
+    DB_PORT = CONFIG.get("groceror").get("db").get("DB_PORT")
+    DB_NAME = CONFIG.get("groceror").get("db").get("DB_USER")
     DB_URL = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 
 
 @dataclass
 class JWTConfig(object):
     """JWT related configuration"""
-
-    JWT_ALGORITHM = os.getenv("JWT_ALGORITHM")
-    JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+    JWT_ALGORITHM = CONFIG.get("groceror").get("JWT_ALGORITHM")
+    JWT_SECRET_KEY = CONFIG.get("groceror").get("JWT_SECRET_KEY")

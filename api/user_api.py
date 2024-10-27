@@ -1,6 +1,6 @@
-import logging
-
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordBearer
+import jwt
 
 from api.helpers import auth_helper
 from api.validators.user_validation import (
@@ -11,18 +11,41 @@ from api.validators.user_validation import (
     RegistrationPayload,
     RegistrationResponse,
 )
+from config import JWTConfig
 from helpers.jwt import JWT
 from models.service.user_service import User
 from loguru import logger
+from api.helpers.auth_helper import verify_user
+from api.validators.user_validation import UserResponse
 
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
-logger = logging.getLogger("groceror")
+# logger = logging.getLogger("groceror")
 user_apis = APIRouter()
+
+
+def get_current_user(token: str = Depends(oauth2_scheme)):
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(
+            token, JWTConfig.JWT_SECRET_KEY, algorithms=[JWTConfig.JWT_ALGORITHM]
+        )
+        username: str = payload.get("sub")
+        current_user = auth_helper.get_user_by_username(username=username)
+        if current_user is None:
+            raise credentials_exception
+    except jwt.JWTError:
+        raise credentials_exception
 
 
 @user_apis.post("/register", response_model=RegistrationResponse)
 async def register(registration_payload: RegistrationPayload):
     logger.info(f"Registering user with payload: {registration_payload}")
+    verification_token = str(uuid4())
     try:
         if not auth_helper.is_user_exists(email=registration_payload.email):
             new_user = auth_helper.register(**registration_payload.dict())
@@ -60,18 +83,20 @@ async def login(login_payload: LoginPayload):
 
 
 @user_apis.put("/change-password", response_model=ChangePasswordResponse)
-async def change_password(change_password_payload: ChangePasswordPayload):
+async def change_password(
+    change_password_payload: ChangePasswordPayload,
+    current_user: str = Depends(get_current_user),
+):
     logger.info(f"Changing password for user with payload: {change_password_payload}")
-    user_change_password_obj = User()
-    user_change_password_obj.change_password(change_password_payload)
+    auth_helper.change_password(current_user, change_password_payload)
     return {"status": "success"}
 
-
-# logger = logging.getLogger(__name__)
-
-# @user_apis.get("/logout")
-# def logout():
-#     logger.info("Logging out user")
-#     flask_login.logout_user()
-#     flask.flash("You have been logged out.")
-#     return {"detail": "Logout successful"}
+@user_apis.post("/verify-email/{token}", response_model=UserResponse)
+async def verify_email(token: str):
+    user = verify_user(token)
+    if user:
+        return UserResponse.from_orm(user)
+    else:
+        raise HTTPException(
+            status_code=400, detail="Invalid or expired verification token"
+        )

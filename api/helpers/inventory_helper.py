@@ -14,9 +14,7 @@ class InventoryHelper(object):
     def __init__(self, user: User) -> None:
         self.user = user
 
-    def add_inventory(
-        self, inventory: dict, category: Enum, notes: str = None
-    ) -> dict:
+    def add_inventory(self, inventory: dict, category: Enum, notes: str = None) -> dict:
         try:
             for name, quantity in inventory.items():
                 inventory_obj = (
@@ -70,5 +68,23 @@ class InventoryHelper(object):
             raise e
         else:
             return DBHelper.convert_query_result_to_dict(query_result=store_inventory)
+        finally:
+            db_session.close()
+
+    def get_inventory_by_category(self, category: Enum) -> List[Dict]:
+        try:
+            inventory = (
+                db_session.query(Inventory)
+                .join(User)
+                .filter(User.id == self.user.id, Inventory.category == category)
+                .all()
+            )
+        except Exception as e:
+            logger.exception(
+                f"Error while getting inventory by category with exception details {e}"
+            )
+            raise e
+        else:
+            return DBHelper.convert_query_result_to_dict(query_result=inventory)
         finally:
             db_session.close()

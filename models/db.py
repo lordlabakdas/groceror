@@ -1,4 +1,5 @@
 from sqlmodel import Session, SQLModel, create_engine
+from sqlalchemy_utils import create_database, database_exists
 
 from config import DBConfig
 
@@ -7,4 +8,7 @@ db_session = Session(engine)
 
 
 def create_db_and_tables():
-    SQLModel.metadata.create_all(engine)
+    if not database_exists(engine.url):
+        create_database(engine.url)
+    # SQLModel.metadata.clear()
+    SQLModel.metadata.create_all(bind=engine)

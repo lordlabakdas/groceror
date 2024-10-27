@@ -58,3 +58,25 @@ async def get_store_inventory(
         )
     else:
         return StoreInventoryResponse(inventory=inventory)
+
+
+@inventory_apis.delete("/delete-inventory", response_model=StoreInventoryResponse)
+async def delete_inventory(
+    items: List[str] = None,
+    quantity_limit: int = None,
+    user: User = Depends(auth_required),
+):
+    logger.info(f"Deleting inventory for user: {user.email}")
+    try:
+        inventory_helper_obj = InventoryHelper(user=user)
+        inventory = inventory_helper_obj.delete_inventory(
+            items=items, quantity_limit=quantity_limit
+        )
+    except Exception as e:
+        logger.exception(f"Error while deleting inventory with exception details {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Issue with deleting inventory",
+        )
+    else:
+        return {"status": "success"}

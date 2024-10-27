@@ -3,7 +3,9 @@ from enum import Enum
 from typing import Optional
 from uuid import UUID
 
-from sqlmodel import Field, SQLModel
+from sqlmodel import Field, Relationship, SQLModel
+
+from models.entity.user_entity import User
 
 
 class InventoryCategory(Enum):
@@ -19,7 +21,8 @@ class Inventory(SQLModel, table=True):
     name: str
     quantity: int
     category: Optional[str] = None
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
     notes: Optional[str] = None
-    user_id: int = Field(foreign_key="user.id")
-    # user: User = Relationship("User", back_populates="inventories")
+    user_id: UUID = Field(foreign_key="user.id")
+    # user: "User" = Relationship(back_populates="inventory")

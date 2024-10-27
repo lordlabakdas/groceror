@@ -32,21 +32,25 @@ class LogConfig(BaseModel):
         LOGGER_NAME: {"handlers": ["default"], "level": LOG_LEVEL},
     }
 
+
 CONFIG = yaml.safe_load(open(".config.yml"))
+
 
 @dataclass
 class DBConfig(object):
     """Database configuration to be set for the server"""
+
     DB_USER = CONFIG.get("groceror").get("db").get("DB_USER")
     DB_PASSWORD = CONFIG.get("groceror").get("db").get("DB_PASSWORD")
     DB_HOST = CONFIG.get("groceror").get("db").get("DB_HOST")
     DB_PORT = CONFIG.get("groceror").get("db").get("DB_PORT")
-    DB_NAME = CONFIG.get("groceror").get("db").get("DB_USER")
+    DB_NAME = CONFIG.get("groceror").get("db").get("DB_NAME")
     DB_URL = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 
 
 @dataclass
 class JWTConfig(object):
     """JWT related configuration"""
+
     JWT_ALGORITHM = CONFIG.get("groceror").get("JWT_ALGORITHM")
     JWT_SECRET_KEY = CONFIG.get("groceror").get("JWT_SECRET_KEY")

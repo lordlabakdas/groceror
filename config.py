@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 
-from pydantic import BaseModel
 import yaml
+from pydantic import BaseModel
 
 
 class LogConfig(BaseModel):

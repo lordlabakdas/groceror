@@ -1,9 +1,9 @@
-from enum import Enum
 import uuid
 from datetime import datetime
-from typing import List, Optional
+from enum import Enum
+from typing import Optional
 
-from sqlmodel import Field, Relationship, SQLModel
+from sqlmodel import Field, SQLModel
 
 
 class UserType(str, Enum):

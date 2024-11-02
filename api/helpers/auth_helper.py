@@ -1,15 +1,15 @@
 import os
+
+import boto3
+from botocore.exceptions import ClientError
+from firebase_admin import auth as firebase_auth
 from google.auth.transport import requests
 from google.oauth2 import id_token
+from passlib.context import CryptContext
 
 from api.validators.user_validation import ChangePasswordPayload
 from models.db import db_session
 from models.entity.user_entity import User
-from passlib.context import CryptContext
-from firebase_admin import auth as firebase_auth
-
-import boto3
-from botocore.exceptions import ClientError
 
 
 def validate_google_token(token, client_id):

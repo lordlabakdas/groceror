@@ -1,22 +1,19 @@
+from uuid import uuid4
+
+import jwt
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
-import jwt
+from loguru import logger
 
 from api.helpers import auth_helper
-from api.validators.user_validation import (
-    ChangePasswordPayload,
-    ChangePasswordResponse,
-    LoginPayload,
-    LoginResponse,
-    RegistrationPayload,
-    RegistrationResponse,
-)
+from api.helpers.auth_helper import verify_user
+from api.validators.user_validation import (ChangePasswordPayload,
+                                            ChangePasswordResponse,
+                                            LoginPayload, LoginResponse,
+                                            RegistrationPayload,
+                                            RegistrationResponse, UserResponse)
 from config import JWTConfig
 from helpers.jwt import JWT
-from models.service.user_service import User
-from loguru import logger
-from api.helpers.auth_helper import verify_user
-from api.validators.user_validation import UserResponse
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
@@ -48,7 +45,9 @@ async def register(registration_payload: RegistrationPayload):
     verification_token = str(uuid4())
     try:
         if not auth_helper.is_user_exists(email=registration_payload.email):
-            new_user = auth_helper.register(**registration_payload.dict())
+            new_user = auth_helper.register(
+                **registration_payload.dict(), verification_token=verification_token
+            )
         else:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
@@ -90,6 +89,7 @@ async def change_password(
     logger.info(f"Changing password for user with payload: {change_password_payload}")
     auth_helper.change_password(current_user, change_password_payload)
     return {"status": "success"}
+
 
 @user_apis.post("/verify-email/{token}", response_model=UserResponse)
 async def verify_email(token: str):

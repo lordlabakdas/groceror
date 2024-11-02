@@ -6,13 +6,12 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from firebase_admin import credentials
-
-from api.inventory_api import inventory_apis
-from api.user_api import user_apis
-from api.google_login import google_login_apis
-from models.db import create_db_and_tables
 from loguru import logger
 
+from api.google_login import google_login_apis
+from api.inventory_api import inventory_apis
+from api.user_api import user_apis
+from models.db import create_db_and_tables
 
 logger.add(
     sys.stderr, format="{time} {level} {message}", filter="my_module", level="INFO"

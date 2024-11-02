@@ -3,7 +3,6 @@ import logging
 from fastapi import APIRouter, HTTPException
 from google.oauth2 import id_token
 
-
 logger = logging.getLogger("groceror")
 google_login_apis = APIRouter()
 

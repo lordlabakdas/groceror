@@ -3,9 +3,7 @@ from enum import Enum
 from typing import Optional
 from uuid import UUID
 
-from sqlmodel import Field, Relationship, SQLModel
-
-from models.entity.user_entity import User
+from sqlmodel import Field, SQLModel
 
 
 class InventoryCategory(Enum):

@@ -6,12 +6,11 @@ from fastapi.security import OAuth2PasswordBearer
 from loguru import logger
 
 from api.helpers import auth_helper
-from api.helpers.auth_helper import verify_user
 from api.validators.user_validation import (ChangePasswordPayload,
                                             ChangePasswordResponse,
                                             LoginPayload, LoginResponse,
                                             RegistrationPayload,
-                                            RegistrationResponse, UserResponse)
+                                            RegistrationResponse)
 from config import JWTConfig
 from helpers.jwt import JWT
 
@@ -42,11 +41,10 @@ def get_current_user(token: str = Depends(oauth2_scheme)):
 @user_apis.post("/register", response_model=RegistrationResponse)
 async def register(registration_payload: RegistrationPayload):
     logger.info(f"Registering user with payload: {registration_payload}")
-    verification_token = str(uuid4())
     try:
         if not auth_helper.is_user_exists(email=registration_payload.email):
             new_user = auth_helper.register(
-                **registration_payload.dict(), verification_token=verification_token
+                **registration_payload.dict()
             )
         else:
             raise HTTPException(
@@ -91,12 +89,3 @@ async def change_password(
     return {"status": "success"}
 
 
-@user_apis.post("/verify-email/{token}", response_model=UserResponse)
-async def verify_email(token: str):
-    user = verify_user(token)
-    if user:
-        return UserResponse.from_orm(user)
-    else:
-        raise HTTPException(
-            status_code=400, detail="Invalid or expired verification token"
-        )

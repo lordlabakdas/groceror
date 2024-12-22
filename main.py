@@ -1,11 +1,9 @@
 import logging
 import sys
 
-import firebase_admin
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from firebase_admin import credentials
 from loguru import logger
 
 from api.google_login import google_login_apis

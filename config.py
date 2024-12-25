@@ -52,5 +52,5 @@ class DBConfig(object):
 class JWTConfig(object):
     """JWT related configuration"""
 
-    JWT_ALGORITHM = CONFIG.get("groceror").get("JWT_ALGORITHM")
-    JWT_SECRET_KEY = CONFIG.get("groceror").get("JWT_SECRET_KEY")
+    JWT_ALGORITHM = CONFIG.get("groceror").get("jwt").get("JWT_ALGORITHM")
+    JWT_SECRET_KEY = CONFIG.get("groceror").get("jwt").get("JWT_SECRET_KEY")

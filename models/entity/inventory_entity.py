@@ -1,7 +1,7 @@
 from datetime import datetime
 from enum import Enum
 from typing import Optional
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from sqlmodel import Field, SQLModel
 
@@ -15,7 +15,7 @@ class InventoryCategory(Enum):
 
 
 class Inventory(SQLModel, table=True):
-    id: Optional[UUID] = Field(default=None, primary_key=True)
+    id: Optional[UUID] = Field(default_factory=uuid4, primary_key=True)
     name: str
     quantity: int
     category: Optional[str] = None

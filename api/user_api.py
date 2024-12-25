@@ -75,7 +75,7 @@ async def login(login_payload: LoginPayload):
         )
 
     jwt_obj = JWT()
-    access_token = jwt_obj.create_token({"sub": user.username})
+    access_token = jwt_obj.create_token({"sub": user.email})
     return {"token": access_token}
 
 

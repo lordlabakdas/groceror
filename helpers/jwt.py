@@ -15,14 +15,9 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 async def auth_required(token: str = Depends(oauth2_scheme)):
     try:
-        payload = JWT.decode_token(token=token)
-        email: str = payload.get("email")
-        if email is None:
-            logger.exception("Invalid authentication credentials")
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid authentication credentials",
-            )
+        jwt_obj = JWT()
+        payload = jwt_obj.decode_token(token=token)
+        email: str = payload.get("sub")
     except Exception as e:
         logger.exception(f"Invalid authentication credentials {e}")
         raise HTTPException(
@@ -55,9 +50,24 @@ class JWT(object):
     def decode_token(self, token: str) -> Union[Dict[str, str], None]:
         try:
             decoded_token = jwt.decode(
-                token, key=self.secret_key, algorithm=self.algorithm
+                token, key=self.secret_key, algorithms=[self.algorithm]
             )
-        except Exception:
-            return None
-        else:
-            return decoded_token
+        except jwt.ExpiredSignatureError:
+            logger.exception("Token has expired")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Token has expired"
+            )
+        except jwt.InvalidTokenError:
+            logger.exception("Invalid token")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token"
+            )
+        except Exception as e:
+            logger.exception(f"Error while decoding token: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Error decoding token"
+            )
+        return decoded_token

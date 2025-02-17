@@ -21,7 +21,8 @@ class Cart(object):
         return sum(item['price'] for item in self.items)
     
     def checkout(self):
-        pass
+        self.clear_cart()
+        return self.get_cart_total()
     
     def get_cart_items(self):
         return self.items

@@ -22,4 +22,4 @@ class User(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
     updated_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
     location: Optional[str] = None
-    #inventory: List["Inventory"] = Relationship(back_populates="user")
+    # inventory: List["Inventory"] = Relationship(back_populates="user")

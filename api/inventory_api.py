@@ -4,9 +4,11 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from api.helpers.inventory_helper import InventoryHelper
-from api.validators.inventory_validation import (AddInventoryPayload,
-                                                 AddInventoryResponse,
-                                                 StoreInventoryResponse)
+from api.validators.inventory_validation import (
+    AddInventoryPayload,
+    AddInventoryResponse,
+    StoreInventoryResponse,
+)
 from helpers.jwt import auth_required
 from models.entity.user_entity import User
 

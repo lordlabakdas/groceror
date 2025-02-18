@@ -36,18 +36,15 @@ async def add_inventory(
         return {"inventory_id": new_inventory_id}
 
 
-@inventory_apis.post("/get-store-inventory", response_model=StoreInventoryResponse)
+@inventory_apis.get("/get-store-inventory", response_model=StoreInventoryResponse)
 async def get_store_inventory(
     items: List[str] = None,
-    quantity_limit: int = None,
     user: User = Depends(auth_required),
 ):
     logger.info(f"Getting inventory for store: {user.email}")
     try:
         inventory_helper_obj = InventoryHelper(user=user)
-        inventory = inventory_helper_obj.get_store_inventory(
-            items=items, quantity_limit=quantity_limit
-        )
+        inventory = inventory_helper_obj.get_store_inventory(items=items)
     except Exception as e:
         logger.exception(
             f"Error while retreiving store inventory with exception details {e}"
@@ -63,15 +60,12 @@ async def get_store_inventory(
 @inventory_apis.delete("/delete-inventory", response_model=StoreInventoryResponse)
 async def delete_inventory(
     items: List[str] = None,
-    quantity_limit: int = None,
     user: User = Depends(auth_required),
 ):
     logger.info(f"Deleting inventory for user: {user.email}")
     try:
         inventory_helper_obj = InventoryHelper(user=user)
-        inventory = inventory_helper_obj.delete_inventory(
-            items=items, quantity_limit=quantity_limit
-        )
+        inventory_helper_obj.delete_inventory(items=items)
     except Exception as e:
         logger.exception(f"Error while deleting inventory with exception details {e}")
         raise HTTPException(

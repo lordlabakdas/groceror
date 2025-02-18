@@ -9,6 +9,14 @@ from models.entity.user_entity import User
 
 logger = logging.getLogger()
 
+def to_dict(self):
+    return {
+        "name": self.name,
+        "quantity": self.quantity,
+        "category": self.category,
+        "user_id": self.user_id,
+        "notes": self.notes,
+    }
 
 class InventoryHelper(object):
     def __init__(self, user: User) -> None:
@@ -50,7 +58,7 @@ class InventoryHelper(object):
                 db_session.query(Inventory)
                 .join(User)
                 .filter(User.id == self.user.id)
-                .first()
+                .all()
             )
             if store_inventory:
                 if items:
@@ -63,7 +71,7 @@ class InventoryHelper(object):
             logger.exception(f"Error while adding inventory with exception details {e}")
             raise e
         else:
-            return DBHelper.convert_query_result_to_dict(query_result=store_inventory)
+            return [to_dict(inventory) for inventory in store_inventory]
         finally:
             db_session.close()
 
@@ -81,7 +89,7 @@ class InventoryHelper(object):
             )
             raise e
         else:
-            return DBHelper.convert_query_result_to_dict(query_result=inventory)
+            return [inv.to_dict() for inv in inventory]
         finally:
             db_session.close()
 

@@ -14,3 +14,28 @@ class CartEntity(SQLModel, table=True   ):
     total_price: float = Field(default=0.0)
     total_quantity: int = Field(default=0)
     notes: Optional[str] = None
+
+    def add_item(self, item: CartItemEntity):
+        self.items.append(item)
+        self.total_price += item.price
+        self.total_quantity += item.quantity
+
+    def remove_item(self, item: CartItemEntity):
+        self.items.remove(item)
+        self.total_price -= item.price
+        self.total_quantity -= item.quantity
+
+
+    def clear(self):
+        self.items = []
+        self.total_price = 0.0
+        self.total_quantity = 0
+
+    def get_total_price(self):
+        return sum(item.price * item.quantity for item in self.items)
+
+    def get_total_quantity(self):
+        return sum(item.quantity for item in self.items)
+
+    def get_items(self):
+        return self.items

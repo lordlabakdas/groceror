@@ -1,6 +1,7 @@
 from models.entity.cart_entity import CartEntity
 from models.entity.cart_item_entity import CartItemEntity
 
+
 class CartService(object):
     def __init__(self, cart_entity: CartEntity):
         self.cart_entity = cart_entity

@@ -9,12 +9,22 @@ from models.entity.user_entity import User
 
 logger = logging.getLogger()
 
+def to_dict(self):
+    return {
+        "name": self.name,
+        "quantity": self.quantity,
+        "category": self.category,
+        "user_id": self.user_id,
+        "notes": self.notes,
+    }
 
 class InventoryHelper(object):
     def __init__(self, user: User) -> None:
         self.user = user
 
-    def add_inventory(self, name: str, quantity: int, category: Enum, notes: str = None) -> dict:
+    def add_inventory(
+        self, name: str, quantity: int, category: Enum, notes: str = None
+    ) -> dict:
         try:
             inventory_obj = (
                 db_session.query(Inventory)
@@ -42,32 +52,26 @@ class InventoryHelper(object):
         finally:
             db_session.close()
 
-    def get_store_inventory(
-        self, items: List[str] = None, quantity_limit: int = None
-    ) -> List[Dict]:
+    def get_store_inventory(self, items: List[str] = None) -> List[Dict]:
         try:
             store_inventory = (
                 db_session.query(Inventory)
                 .join(User)
                 .filter(User.id == self.user.id)
-                .first()
+                .all()
             )
             if store_inventory:
                 if items:
                     store_inventory = store_inventory.filter(
                         Inventory.name.in_(items)
                     ).all()
-                if quantity_limit:
-                    store_inventory = store_inventory.filter(
-                        Inventory.quantity > quantity_limit
-                    )
             else:
                 logger.critical(f"No store inventory found for {self.user}")
         except Exception as e:
             logger.exception(f"Error while adding inventory with exception details {e}")
             raise e
         else:
-            return DBHelper.convert_query_result_to_dict(query_result=store_inventory)
+            return [to_dict(inventory) for inventory in store_inventory]
         finally:
             db_session.close()
 
@@ -85,7 +89,7 @@ class InventoryHelper(object):
             )
             raise e
         else:
-            return DBHelper.convert_query_result_to_dict(query_result=inventory)
+            return [inv.to_dict() for inv in inventory]
         finally:
             db_session.close()
 
@@ -109,10 +113,14 @@ class InventoryHelper(object):
 
     def update_inventory(self, inventory: dict) -> None:
         try:
-            db_session.query(Inventory).filter(Inventory.id == inventory.id).update(inventory)
+            db_session.query(Inventory).filter(Inventory.id == inventory.id).update(
+                inventory
+            )
             db_session.commit()
         except Exception as e:
-            logger.exception(f"Error while updating inventory with exception details {e}")
+            logger.exception(
+                f"Error while updating inventory with exception details {e}"
+            )
             raise e
         finally:
             db_session.close()
@@ -122,5 +130,7 @@ class InventoryHelper(object):
             db_session.query(Inventory).filter(Inventory.id == inventory.id).delete()
             db_session.commit()
         except Exception as e:
-            logger.exception(f"Error while deleting inventory with exception details {e}")
+            logger.exception(
+                f"Error while deleting inventory with exception details {e}"
+            )
             raise e

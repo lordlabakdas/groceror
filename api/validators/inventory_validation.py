@@ -26,10 +26,10 @@ class AddInventoryResponse(BaseModel):
 
 
 class StoreInventory(BaseModel):
-    email: str
-    name: str  # TODO distinguish between user name and inventory name
-    address: str
+    name: str
     quantity: int
+    category: InventoryCategory
+    notes: Optional[str] = None
 
 
 class StoreInventoryResponse(BaseModel):

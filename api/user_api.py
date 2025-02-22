@@ -6,11 +6,14 @@ from fastapi.security import OAuth2PasswordBearer
 from loguru import logger
 
 from api.helpers import auth_helper
-from api.validators.user_validation import (ChangePasswordPayload,
-                                            ChangePasswordResponse,
-                                            LoginPayload, LoginResponse,
-                                            RegistrationPayload,
-                                            RegistrationResponse)
+from api.validators.user_validation import (
+    ChangePasswordPayload,
+    ChangePasswordResponse,
+    LoginPayload,
+    LoginResponse,
+    RegistrationPayload,
+    RegistrationResponse,
+)
 from config import JWTConfig
 from helpers.jwt import JWT
 
@@ -43,9 +46,7 @@ async def register(registration_payload: RegistrationPayload):
     logger.info(f"Registering user with payload: {registration_payload}")
     try:
         if not auth_helper.is_user_exists(email=registration_payload.email):
-            new_user = auth_helper.register(
-                **registration_payload.dict()
-            )
+            new_user = auth_helper.register(**registration_payload.dict())
         else:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
@@ -87,5 +88,3 @@ async def change_password(
     logger.info(f"Changing password for user with payload: {change_password_payload}")
     auth_helper.change_password(current_user, change_password_payload)
     return {"status": "success"}
-
-

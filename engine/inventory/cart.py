@@ -1,8 +1,9 @@
 from models.entity.user_entity import User
+from models.entity.store_entity import Store
 
 
 class Cart(object):
-    def __init__(self, user: User):
+    def __init__(self, user: User, store: Store):
         self.user = user
         self.items = []
 

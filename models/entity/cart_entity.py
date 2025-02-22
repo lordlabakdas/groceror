@@ -5,7 +5,7 @@ from sqlmodel import Field, SQLModel
 from models.entity.cart_item_entity import CartItemEntity
 
 
-class CartEntity(SQLModel, table=True   ):
+class CartEntity(SQLModel, table=True):
     id: Optional[UUID] = Field(default_factory=uuid4, primary_key=True)
     user_id: UUID = Field(foreign_key="user.id")
     items: List[CartItemEntity] = Field(default=[])
@@ -24,7 +24,6 @@ class CartEntity(SQLModel, table=True   ):
         self.items.remove(item)
         self.total_price -= item.price
         self.total_quantity -= item.quantity
-
 
     def clear(self):
         self.items = []

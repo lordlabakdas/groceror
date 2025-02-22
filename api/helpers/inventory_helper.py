@@ -9,6 +9,7 @@ from models.entity.user_entity import User
 
 logger = logging.getLogger()
 
+
 def to_dict(self):
     return {
         "name": self.name,
@@ -17,6 +18,7 @@ def to_dict(self):
         "user_id": self.user_id,
         "notes": self.notes,
     }
+
 
 class InventoryHelper(object):
     def __init__(self, user: User) -> None:

@@ -12,6 +12,7 @@ from api.google_login import google_login_apis
 from api.inventory_api import inventory_apis
 from api.store_api import store_apis
 from api.user_api import user_apis
+from api.cart_api import cart_apis
 from models.db import create_db_and_tables
 
 logger.add(
@@ -53,6 +54,7 @@ app.include_router(user_apis, prefix="/user")
 app.include_router(google_login_apis, prefix="/google")
 app.include_router(inventory_apis, prefix="/inventory")
 app.include_router(store_apis, prefix="/store")
+app.include_router(cart_apis, prefix="/cart")
 
 create_db_and_tables()
 
@@ -63,9 +65,9 @@ def custom_openapi():
     if app.openapi_schema:
         return app.openapi_schema
     openapi_schema = get_openapi(
-        title="Your API Title",
+        title="Groceror API",
         version="1.0.0",
-        description="Your API Description",
+        description="Groceror API",
         routes=app.routes,
     )
     openapi_schema["components"]["securitySchemes"] = {

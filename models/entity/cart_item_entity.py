@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 from uuid import UUID, uuid4
-from sqlmodel import Field, SQLModel
+from sqlmodel import Field, SQLModel, Relationship
 
 
 class CartItemEntity(SQLModel, table=True):
@@ -13,3 +13,6 @@ class CartItemEntity(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     notes: Optional[str] = None
+
+    # Add the back-reference to cart
+    cart: "CartEntity" = Relationship(back_populates="items")

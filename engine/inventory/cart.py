@@ -1,5 +1,6 @@
 from models.entity.user_entity import User
 
+
 class Cart(object):
     def __init__(self, user: User):
         self.user = user
@@ -13,20 +14,20 @@ class Cart(object):
 
     def get_cart(self):
         return self.items
-    
+
     def clear_cart(self):
         self.items = []
-    
+
     def get_total(self):
-        return sum(item['price'] for item in self.items)
-    
+        return sum(item["price"] for item in self.items)
+
     def checkout(self):
         self.clear_cart()
         return self.get_cart_total()
-    
+
     def get_cart_items(self):
         return self.items
-    
+
     def get_cart_total(self):
         return self.get_total()
 
@@ -34,5 +35,4 @@ class Cart(object):
         return len(self.items)
 
     def get_cart_items_total(self):
-        return sum(item['price'] for item in self.items)
-    
+        return sum(item["price"] for item in self.items)

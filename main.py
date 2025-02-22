@@ -53,4 +53,4 @@ app.include_router(inventory_apis, prefix="/inventory")
 create_db_and_tables()
 
 if __name__ == "__main__":
-    uvicorn.run(app, port=8009)
+    uvicorn.run(app, port=8000)

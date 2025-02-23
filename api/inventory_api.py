@@ -13,7 +13,7 @@ from helpers.jwt import auth_required
 from models.entity.user_entity import User
 
 logger = logging.getLogger("groceror")
-inventory_apis = APIRouter()
+inventory_apis = APIRouter(prefix="/inventory", tags=["inventory"])
 
 
 @inventory_apis.post("/add-inventory", response_model=AddInventoryResponse)

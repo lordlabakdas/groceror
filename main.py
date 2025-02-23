@@ -49,12 +49,12 @@ async def welcome():
     return "Welcome to Groceror!"
 
 
-app.include_router(user_apis, prefix="/user")
+app.include_router(user_apis)
 # app.include_router(firebase_api, prefix="/firebase")
-app.include_router(google_login_apis, prefix="/google")
-app.include_router(inventory_apis, prefix="/inventory")
-app.include_router(store_apis, prefix="/store")
-app.include_router(cart_apis, prefix="/cart")
+app.include_router(google_login_apis)
+app.include_router(inventory_apis)
+app.include_router(store_apis)
+app.include_router(cart_apis)
 
 create_db_and_tables()
 

@@ -20,7 +20,7 @@ from helpers.jwt import JWT
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 # logger = logging.getLogger("groceror")
-user_apis = APIRouter()
+user_apis = APIRouter(prefix="/user", tags=["user"])
 
 
 def get_current_user(token: str = Depends(oauth2_scheme)):

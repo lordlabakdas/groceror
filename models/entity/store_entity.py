@@ -28,7 +28,7 @@ class Store(SQLModel, table=True):
     def __hash__(self):
         return hash(self.id)
 
-    def is_active(self):
+    def active(self):
         return self.is_active
 
     def is_inactive(self):

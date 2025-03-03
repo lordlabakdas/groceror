@@ -10,7 +10,7 @@ firebase-admin==6.1.0
 psycopg2==2.9.5
 passlib==1.7.4
 bcrypt==4.0.1
-ruff ==0.0.272
+ruff ==0.9.9
 loguru==0.7.2
 pyyaml==6.0.1
 sqlalchemy_utils==0.41.2

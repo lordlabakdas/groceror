@@ -106,7 +106,7 @@ def send_verification_email(email: str, token: str):
     <body>
         <h1>Verify your email address</h1>
         <p>Please click the following link to verify your email:</p>
-        <p><a href="{os.environ['BASE_URL']}/verify/{token}">Verify Email</a></p>
+        <p><a href="{os.environ["BASE_URL"]}/verify/{token}">Verify Email</a></p>
     </body>
     </html>
     """

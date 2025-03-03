@@ -1,5 +1,6 @@
 import logging
 import sys
+import os
 
 import uvicorn
 from fastapi import FastAPI
@@ -15,17 +16,14 @@ from api.user_api import user_apis
 from api.cart_api import cart_apis
 from models.db import create_db_and_tables
 
-logger.add(
-    sys.stderr, format="{time} {level} {message}", filter="my_module", level="INFO"
-)
-logger.add("file_{time}.log")
-logger.add(
-    sys.stdout, colorize=True, format="<green>{time}</green> <level>{message}</level>"
-)
-logger = logging.getLogger("groceror")
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger.add(sys.stderr, format="{time} {level} {message}", level="INFO")
 
 app = FastAPI(debug=False)
-app.logger = logger
+
+# Get port from environment variable (Heroku sets this)
+port = int(os.getenv("PORT", 8000))
 
 # Allow requests from any origin
 origins = ["*"]
@@ -88,4 +86,14 @@ def custom_openapi():
 app.openapi = custom_openapi
 
 if __name__ == "__main__":
-    uvicorn.run(app, port=8000)
+    try:
+        uvicorn.run(
+            "main:app",
+            host="0.0.0.0",
+            port=port,
+            log_level="info",
+            reload=False  # Set to False in production
+        )
+    except Exception as e:
+        logger.error(f"Failed to start server: {e}")
+        sys.exit(1)

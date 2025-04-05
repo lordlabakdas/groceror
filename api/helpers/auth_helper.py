@@ -27,14 +27,13 @@ def validate_google_token(token, client_id):
 
 
 def register(
-    name: str, email: str, address: str, entity_type: str, username: str, password: str
+    name: str, email: str, address: str, entity_type: str, password: str
 ):
     user = User(
         name=name,
         email=email,
         address=address,
         entity_type=entity_type,
-        username=username,
         password=hash_password(password),
     )
     db_session.add(user)

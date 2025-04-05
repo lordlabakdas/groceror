@@ -8,7 +8,6 @@ class RegistrationPayload(BaseModel):
     email: str
     address: str
     entity_type: str
-    username: str
     password: str
 
 

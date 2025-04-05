@@ -12,12 +12,16 @@ class Store(SQLModel, table=True):
     user_id: UUID = Field(foreign_key="user.id")
     # user: User = Relationship(back_populates="stores")
     address: str = Field(index=True)
+    latitude: float = Field(default=None)
+    longitude: float = Field(default=None)
     phone: str = Field(index=True)
     email: str = Field(index=True)
     website: str = Field(index=True)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     is_active: bool = Field(default=True)
+    latitude: float = Field(default=None)
+    longitude: float = Field(default=None)
 
     def __repr__(self):
         return f"<Store(id={self.id}, name={self.name})>"

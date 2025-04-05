@@ -1,6 +1,6 @@
-from typing import List
+from typing import List, Optional
 from uuid import UUID
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from pydantic import BaseModel
 
 from helpers.jwt import auth_required
@@ -13,6 +13,8 @@ store_apis = APIRouter(prefix="/stores", tags=["stores"])
 class StoreCreate(BaseModel):
     name: str
     address: str
+    latitude: float
+    longitude: float
     phone: str
     email: str
     website: str = None
@@ -24,6 +26,24 @@ class StoreUpdate(BaseModel):
     phone: str = None
     email: str = None
     website: str = None
+
+
+class Location(BaseModel):
+    latitude: float
+    longitude: float
+    radius: Optional[float] = 10.0  # Default 10km radius
+
+
+class StoreWithDistance(BaseModel):
+    id: UUID
+    name: str
+    address: str
+    latitude: float
+    longitude: float
+    distance: float  # Distance in kilometers
+    phone: str
+    email: str
+    website: Optional[str]
 
 
 @store_apis.post("/", status_code=status.HTTP_201_CREATED)
@@ -100,3 +120,14 @@ async def activate_store(store_id: UUID, current_user: User = Depends(auth_requi
 async def search_stores(query: str, current_user: User = Depends(auth_required)):
     store_service = StoreService()
     return store_service.search_stores(query)
+
+
+@store_apis.get("/nearby/", response_model=List[StoreWithDistance])
+async def get_nearby_stores(
+    latitude: float = Query(..., description="Latitude of the search location"),
+    longitude: float = Query(..., description="Longitude of the search location"),
+    radius: float = Query(10.0, description="Search radius in kilometers"),
+    current_user: User = Depends(auth_required)
+):
+    store_service = StoreService()
+    return store_service.find_nearby_stores(latitude, longitude, radius)

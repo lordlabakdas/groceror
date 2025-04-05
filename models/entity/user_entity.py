@@ -17,7 +17,6 @@ class User(SQLModel, table=True):
     name: str
     email: str
     entity_type: Optional[str] = None
-    username: str
     password: str
     created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
     updated_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)

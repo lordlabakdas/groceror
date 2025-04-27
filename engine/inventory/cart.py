@@ -1,5 +1,5 @@
-from models.entity.user_entity import User
 from models.entity.store_entity import Store
+from models.entity.user_entity import User
 
 
 class Cart(object):

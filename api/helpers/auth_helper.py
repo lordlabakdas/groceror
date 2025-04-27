@@ -26,9 +26,7 @@ def validate_google_token(token, client_id):
         return None
 
 
-def register(
-    name: str, email: str, address: str, entity_type: str, password: str
-):
+def register(name: str, email: str, address: str, entity_type: str, password: str):
     user = User(
         name=name,
         email=email,

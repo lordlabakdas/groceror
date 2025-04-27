@@ -39,5 +39,5 @@ class Inventory(SQLModel, table=True):
             "price": self.price,
             "notes": self.notes,
             "created_at": self.created_at,
-            "updated_at": self.updated_at
+            "updated_at": self.updated_at,
         }

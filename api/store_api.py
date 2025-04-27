@@ -1,6 +1,7 @@
 from typing import List, Optional
 from uuid import UUID
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 
 from helpers.jwt import auth_required
@@ -127,7 +128,7 @@ async def get_nearby_stores(
     latitude: float = Query(..., description="Latitude of the search location"),
     longitude: float = Query(..., description="Longitude of the search location"),
     radius: float = Query(10.0, description="Search radius in kilometers"),
-    current_user: User = Depends(auth_required)
+    current_user: User = Depends(auth_required),
 ):
     store_service = StoreService()
     return store_service.find_nearby_stores(latitude, longitude, radius)

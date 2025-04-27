@@ -1,13 +1,14 @@
+from datetime import datetime
 from typing import List, Optional
 from uuid import UUID
-from datetime import datetime
+
 from fastapi import HTTPException, status
 
 from models.db import db_session
 from models.entity.cart_entity import CartEntity
 from models.entity.cart_item_entity import CartItemEntity
-from models.entity.user_entity import User
 from models.entity.inventory_entity import Inventory
+from models.entity.user_entity import User
 
 
 class CartService:

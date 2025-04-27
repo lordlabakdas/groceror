@@ -1,6 +1,7 @@
 from typing import List
-from models.entity.inventory_entity import Inventory
+
 from models.db import db_session
+from models.entity.inventory_entity import Inventory
 
 
 class InventoryService:

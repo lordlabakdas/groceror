@@ -1,6 +1,6 @@
-from enum import Enum
 import uuid
 from datetime import datetime
+from enum import Enum
 from typing import Optional
 
 from sqlmodel import Field, SQLModel

@@ -1,19 +1,14 @@
-from uuid import uuid4
-
 import jwt
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from loguru import logger
 
 from api.helpers import auth_helper
-from api.validators.user_validation import (
-    ChangePasswordPayload,
-    ChangePasswordResponse,
-    LoginPayload,
-    LoginResponse,
-    RegistrationPayload,
-    RegistrationResponse,
-)
+from api.validators.user_validation import (ChangePasswordPayload,
+                                            ChangePasswordResponse,
+                                            LoginPayload, LoginResponse,
+                                            RegistrationPayload,
+                                            RegistrationResponse)
 from config import JWTConfig
 from helpers.jwt import JWT
 

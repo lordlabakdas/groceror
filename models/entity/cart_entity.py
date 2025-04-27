@@ -1,7 +1,9 @@
 from datetime import datetime
-from typing import Optional, List
+from typing import List, Optional
 from uuid import UUID, uuid4
-from sqlmodel import Field, SQLModel, Relationship
+
+from sqlmodel import Field, Relationship, SQLModel
+
 from models.entity.cart_item_entity import CartItemEntity
 
 

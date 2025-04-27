@@ -1,6 +1,6 @@
 import logging
-import sys
 import os
+import sys
 
 import uvicorn
 from fastapi import FastAPI
@@ -9,11 +9,11 @@ from fastapi.openapi.utils import get_openapi
 from fastapi.security import OAuth2PasswordBearer
 from loguru import logger
 
+from api.cart_api import cart_apis
 from api.google_login import google_login_apis
 from api.inventory_api import inventory_apis
 from api.store_api import store_apis
 from api.user_api import user_apis
-from api.cart_api import cart_apis
 from models.db import create_db_and_tables
 
 # Configure logging
@@ -92,7 +92,7 @@ if __name__ == "__main__":
             host="0.0.0.0",
             port=port,
             log_level="info",
-            reload=False  # Set to False in production
+            reload=False,  # Set to False in production
         )
     except Exception as e:
         logger.error(f"Failed to start server: {e}")

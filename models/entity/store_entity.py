@@ -1,6 +1,7 @@
 from datetime import datetime
 from typing import Optional
 from uuid import UUID, uuid4
+
 from sqlmodel import Field, Relationship, SQLModel
 
 from models.entity.user_entity import User

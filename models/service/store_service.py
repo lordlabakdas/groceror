@@ -1,13 +1,15 @@
+from datetime import datetime
 from typing import List, Optional, Tuple
 from uuid import UUID
-from datetime import datetime
-from fastapi import HTTPException, status
+
 import requests
+from fastapi import HTTPException, status
 from sqlalchemy import text
 
 from models.db import db_session
 from models.entity.store_entity import Store
 from models.entity.user_entity import User
+
 
 def get_coordinates(address: str) -> Tuple[float, float]:
     # Use Google Maps API to get coordinates
@@ -15,12 +17,16 @@ def get_coordinates(address: str) -> Tuple[float, float]:
     try:
         response = requests.get(url)
         data = response.json()
-        return data['results'][0]['geometry']['location']['lat'], data['results'][0]['geometry']['location']['lng']
+        return (
+            data["results"][0]["geometry"]["location"]["lat"],
+            data["results"][0]["geometry"]["location"]["lng"],
+        )
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error getting coordinates: {str(e)}"
+            detail=f"Error getting coordinates: {str(e)}",
         )
+
 
 class StoreService:
     def create_store(
@@ -118,13 +124,16 @@ class StoreService:
             .all()
         )
 
-    def find_nearby_stores(self, latitude: float, longitude: float, radius: float = 10.0) -> List[dict]:
+    def find_nearby_stores(
+        self, latitude: float, longitude: float, radius: float = 10.0
+    ) -> List[dict]:
         """
         Find stores within specified radius (in kilometers) using Haversine formula
         """
         try:
             # SQL query using Haversine formula
-            query = text("""
+            query = text(
+                """
                 SELECT 
                     id,
                     name,
@@ -144,15 +153,11 @@ class StoreService:
                 WHERE is_active = true
                 HAVING distance <= :radius 
                 ORDER BY distance;
-            """)
+            """
+            )
 
             result = db_session.execute(
-                query,
-                {
-                    "lat": latitude,
-                    "lon": longitude,
-                    "radius": radius
-                }
+                query, {"lat": latitude, "lon": longitude, "radius": radius}
             )
 
             stores = []
@@ -166,7 +171,7 @@ class StoreService:
                     "distance": round(row.distance, 2),  # Round to 2 decimal places
                     "phone": row.phone,
                     "email": row.email,
-                    "website": row.website
+                    "website": row.website,
                 }
                 stores.append(store_dict)
 
@@ -175,5 +180,5 @@ class StoreService:
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Error finding nearby stores: {str(e)}"
+                detail=f"Error finding nearby stores: {str(e)}",
             )

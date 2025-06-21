@@ -182,3 +182,17 @@ class StoreService:
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Error finding nearby stores: {str(e)}",
             )
+
+    def get_store_user_specs(self, store_id: UUID) -> dict:
+        store = self.get_store(store_id)
+        user = db_session.query(User).filter(User.id == store.user_id).first()
+        return {
+            "name": user.name,
+            "email": user.email,
+            "phone": user.phone,
+            "address": user.address,
+        }
+
+    def get_store_email(self, store_id: UUID) -> str:
+        store = self.get_store(store_id)
+        return db_session.query(User).filter(User.id == store.user_id).first().email

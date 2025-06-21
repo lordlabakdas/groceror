@@ -5,6 +5,7 @@ import bcrypt
 import sqlalchemy
 
 from helpers.exceptions import GrocerorError
+
 # from helpers.jwt import JWT
 from models.db import db_session
 from models.entity.user_entity import User

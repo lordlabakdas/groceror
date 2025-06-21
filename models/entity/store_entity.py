@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional
+from typing import List, Optional
 from uuid import UUID, uuid4
 
 from sqlmodel import Field, Relationship, SQLModel
@@ -23,6 +23,8 @@ class Store(SQLModel, table=True):
     is_active: bool = Field(default=True)
     latitude: float = Field(default=None)
     longitude: float = Field(default=None)
+    # user: User = Relationship(back_populates="store")
+    # inventory: List["Inventory"] = Relationship(back_populates="store")
 
     def __repr__(self):
         return f"<Store(id={self.id}, name={self.name})>"

@@ -4,13 +4,19 @@ from fastapi.security import OAuth2PasswordBearer
 from loguru import logger
 
 from api.helpers import auth_helper
-from api.validators.user_validation import (ChangePasswordPayload,
-                                            ChangePasswordResponse,
-                                            LoginPayload, LoginResponse,
-                                            RegistrationPayload,
-                                            RegistrationResponse)
+from api.validators.user_validation import (
+    ChangePasswordPayload,
+    ChangePasswordResponse,
+    LoginPayload,
+    LoginResponse,
+    RegistrationPayload,
+    RegistrationResponse,
+)
 from config import JWTConfig
+from engine import publisher
 from helpers.jwt import JWT
+import pika
+import json
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
@@ -54,6 +60,9 @@ async def register(registration_payload: RegistrationPayload):
             detail="Issue with registering user",
         )
     else:
+        publisher.publish_message(
+            event="user_registered", routing_key="email_queue", new_user=new_user
+        )
         return {"id": new_user.id}
 
 

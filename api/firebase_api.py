@@ -4,12 +4,14 @@ from fastapi import APIRouter, HTTPException, status
 from firebase_admin import auth as firebase_auth
 from google.oauth2 import id_token
 
-from api.validators.user_validation import (ChangePasswordPayload,
-                                            ChangePasswordResponse,
-                                            FirebaseLoginPayload,
-                                            FirebaseLoginResponse,
-                                            FirebaseRegistrationPayload,
-                                            FirebaseRegistrationResponse)
+from api.validators.user_validation import (
+    ChangePasswordPayload,
+    ChangePasswordResponse,
+    FirebaseLoginPayload,
+    FirebaseLoginResponse,
+    FirebaseRegistrationPayload,
+    FirebaseRegistrationResponse,
+)
 from models.service.user_service import User
 
 logger = logging.getLogger("groceror")

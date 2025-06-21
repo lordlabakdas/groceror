@@ -8,7 +8,7 @@ class InventoryService:
     def __init__(self, store_id: str):
         self.store_id = store_id
 
-    def get_inventory(self) -> List[Inventory]:
+    def get_inventory_for_store(self) -> List[Inventory]:
         return (
             db_session.query(Inventory)
             .filter(Inventory.store_id == self.store_id)
@@ -24,5 +24,23 @@ class InventoryService:
         db_session.add(inventory)
         db_session.commit()
 
+    def delete_inventory(self, name: str):
+        store_inventory = (
+            db_session.query(Inventory)
+            .filter(Inventory.name == name, Inventory.store_id == self.store_id)
+            .first()
+        )
+        db_session.delete(store_inventory)
+        db_session.commit()
+
     def update_inventory(self, inventory: Inventory):
+        store_inventory = (
+            db_session.query(Inventory)
+            .filter(
+                Inventory.name == inventory.name, Inventory.store_id == self.store_id
+            )
+            .first()
+        )
+        store_inventory.quantity = inventory.quantity
+        store_inventory.price = inventory.price
         db_session.commit()

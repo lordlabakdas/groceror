@@ -1,9 +1,9 @@
 import uuid
 from datetime import datetime
 from enum import Enum
-from typing import Optional
+from typing import List, Optional
 
-from sqlmodel import Field, SQLModel
+from sqlmodel import Field, Relationship, SQLModel
 
 
 class UserType(str, Enum):
@@ -22,3 +22,4 @@ class User(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
     location: Optional[str] = None
     # inventory: List["Inventory"] = Relationship(back_populates="user")
+    # store: Optional["Store"] = Relationship(back_populates="user")

@@ -5,6 +5,7 @@ from typing import Dict, List
 from helpers.db_helpers import DBHelper
 from models.db import db_session
 from models.entity.inventory_entity import Inventory, InventoryCategory
+from models.entity.store_entity import Store
 from models.entity.user_entity import User
 
 logger = logging.getLogger()
@@ -23,6 +24,9 @@ def to_dict(self):
 class InventoryHelper(object):
     def __init__(self, user: User) -> None:
         self.user = user
+        self.store = (
+            db_session.query(Store).filter(Store.user_id == self.user.id).first()
+        )
 
     def add_inventory(
         self, name: str, quantity: int, category: Enum, notes: str = None
@@ -43,6 +47,7 @@ class InventoryHelper(object):
                     category=InventoryCategory(category).name,
                     user_id=self.user.id,
                     notes=notes,
+                    store_id=self.store.id,
                 )
             db_session.add(inventory_obj)
             db_session.commit()

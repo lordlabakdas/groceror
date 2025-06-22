@@ -12,7 +12,7 @@ from api.validators.inventory_validation import (
 from helpers.jwt import auth_required
 from models.entity.user_entity import User
 
-logger = logging.getLogger("groceror")
+logger = logging.getLogger(__name__)
 inventory_apis = APIRouter(prefix="/inventory", tags=["inventory"])
 
 

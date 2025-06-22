@@ -61,7 +61,10 @@ async def register(registration_payload: RegistrationPayload):
         )
     else:
         publisher.publish_message(
-            event="user_registered", routing_key="email_queue", new_user=new_user
+            queue_name="email_queue",
+            routing_key="email_queue",
+            event="user_registered",
+            **new_user.dict(),
         )
         return {"id": new_user.id}
 

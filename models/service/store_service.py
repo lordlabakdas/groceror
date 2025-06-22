@@ -37,9 +37,12 @@ class StoreService:
         phone: str,
         email: str,
         website: str = None,
+        latitude: float = None,
+        longitude: float = None,
     ) -> Store:
         try:
-            latitude, longitude = get_coordinates(address)
+            if latitude is None or longitude is None:
+                latitude, longitude = get_coordinates(address)
             store = Store(
                 name=name,
                 user_id=user_id,

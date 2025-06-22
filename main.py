@@ -12,6 +12,7 @@ from loguru import logger
 from api.cart_api import cart_apis
 from api.google_login import google_login_apis
 from api.inventory_api import inventory_apis
+from api.order_api import order_apis
 from api.store_api import store_apis
 from api.user_api import user_apis
 from models.db import create_db_and_tables
@@ -53,6 +54,7 @@ app.include_router(google_login_apis)
 app.include_router(inventory_apis)
 app.include_router(store_apis)
 app.include_router(cart_apis)
+app.include_router(order_apis)
 
 create_db_and_tables()
 

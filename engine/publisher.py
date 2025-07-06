@@ -17,6 +17,7 @@ def publish_message(event: str, routing_key: str, queue_name: str, **kwargs):
         # Create message payload
         message = {"event": event, **kwargs}
         # Publish message
+
         channel.basic_publish(
             exchange="",
             routing_key=routing_key,

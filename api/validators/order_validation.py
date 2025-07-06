@@ -9,8 +9,4 @@ class Order(BaseModel):
     items: List[UUID]
     total_price: float
     status: str
-    created_at: datetime
-    updated_at: datetime
-    order_id: UUID = Field(default_factory=uuid4)
     order_date: datetime = Field(default_factory=datetime.utcnow)
-    user_id: UUID

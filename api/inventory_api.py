@@ -10,6 +10,7 @@ from api.validators.inventory_validation import (
     StoreInventoryResponse,
 )
 from helpers.jwt import auth_required
+from models.entity.entity1 import Entity1
 from models.entity.user_entity import User
 
 logger = logging.getLogger(__name__)
@@ -18,7 +19,7 @@ inventory_apis = APIRouter(prefix="/inventory", tags=["inventory"])
 
 @inventory_apis.post("/add-inventory", response_model=AddInventoryResponse)
 async def add_inventory(
-    add_inventory_payload: AddInventoryPayload, user: User = Depends(auth_required)
+    add_inventory_payload: AddInventoryPayload, user: Entity1 = Depends(auth_required)
 ):
     logger.info(f"Adding inventory for user: {add_inventory_payload}")
     try:

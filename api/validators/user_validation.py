@@ -2,17 +2,36 @@ from uuid import UUID
 
 from pydantic import BaseModel
 
+from models.entity.user_entity import UserType
+
 
 class RegistrationPayload(BaseModel):
-    name: str
-    email: str
-    address: str
-    entity_type: str
+    #name: str
+    #email: Optional[str] = None
+    phone: str
+    entity_type: UserType
     password: str
 
 
 class RegistrationResponse(BaseModel):
-    id: UUID
+    id: int
+
+
+class SendOTPPayload(BaseModel):
+    phone: str
+
+
+class SendOTPResponse(BaseModel):
+    message: str
+
+
+class VerifyOTPPayload(BaseModel):
+    phone: str
+    otp: str
+
+
+class VerifyOTPResponse(BaseModel):
+    message: str
 
 
 class FirebaseRegistrationPayload(BaseModel):
@@ -25,7 +44,7 @@ class FirebaseRegistrationResponse(BaseModel):
 
 
 class LoginPayload(BaseModel):
-    email: str
+    phone: str
     password: str
 
 

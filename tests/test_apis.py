@@ -1,6 +1,86 @@
 import pytest
+from fastapi.testclient import TestClient
+from main import app
+
+client = TestClient(app)
 
 
-@pytest.mark.placeholder
-def test_placeholder():
-    assert True
+def test_send_otp():
+    """Test sending OTP to a phone number"""
+    response = client.post("/user/send-otp", json={"phone": "+1234567890"})
+    assert response.status_code == 200
+    assert "message" in response.json()
+    assert "OTP sent successfully" in response.json()["message"]
+
+
+def test_verify_otp_invalid():
+    """Test verifying an invalid OTP"""
+    # First send OTP
+    client.post("/user/send-otp", json={"phone": "+1234567890"})
+    
+    # Try to verify with wrong OTP
+    response = client.post("/user/verify-otp", json={"phone": "+1234567890", "otp": "000000"})
+    assert response.status_code == 400
+    assert "Invalid or expired OTP" in response.json()["detail"]
+
+
+def test_registration_without_phone_verification():
+    """Test registration without phone verification should fail"""
+    registration_data = {
+        "name": "Test User",
+        "email": "test@example.com",
+        "phone": "+1234567890",
+        "address": "123 Test St",
+        "entity_type": "store",
+        "password": "testpassword123"
+    }
+    
+    response = client.post("/user/register", json=registration_data)
+    assert response.status_code == 400
+    assert "Phone number not verified" in response.json()["detail"]
+
+
+def test_complete_registration_flow():
+    """Test complete registration flow with OTP verification"""
+    phone = "+1234567890"
+    email = "test@example.com"
+    
+    # Step 1: Send OTP
+    response = client.post("/user/send-otp", json={"phone": phone})
+    assert response.status_code == 200
+    
+    # Step 2: Get the OTP from the console output (in real scenario, this would be sent via SMS)
+    # For testing, we'll use the legacy endpoint to get the OTP
+    otp_response = client.post("/user/otp", params={"phone": phone})
+    otp = otp_response.json()["otp"]
+    
+    # Step 3: Verify OTP
+    response = client.post("/user/verify-otp", json={"phone": phone, "otp": otp})
+    assert response.status_code == 200
+    assert "OTP verified successfully" in response.json()["message"]
+    
+    # Step 4: Register user
+    registration_data = {
+        "name": "Test User",
+        "email": email,
+        "phone": phone,
+        "address": "123 Test St",
+        "entity_type": "store",
+        "password": "testpassword123"
+    }
+    
+    response = client.post("/user/register", json=registration_data)
+    assert response.status_code == 200
+    assert "id" in response.json()
+
+
+def test_login():
+    """Test user login"""
+    login_data = {
+        "email": "test@example.com",
+        "password": "testpassword123"
+    }
+    
+    response = client.post("/user/login", json=login_data)
+    assert response.status_code == 200
+    assert "token" in response.json()

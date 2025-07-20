@@ -10,9 +10,9 @@ from google.auth.transport import requests
 from google.oauth2 import id_token
 from passlib.context import CryptContext
 
-from api.validators.user_validation import ChangePasswordPayload
+from api.validators.user_validation import ChangePasswordPayload, UserProfilePayload, StoreProfilePayload, ProfilePayload
 from models.db import db_session
-from models.entity.entity1 import Entity1
+from models.entity.phone_verification import PhoneVerification
 from models.entity.user_entity import User, UserType
 from models.entity.store_entity import Store
 
@@ -90,6 +90,81 @@ def change_password(user: User, change_password_payload: ChangePasswordPayload):
     return user
 
 
+def set_user_profile(entity: PhoneVerification, profile_payload: UserProfilePayload):
+    """Set user profile for regular users"""
+    # Check if user profile already exists
+    user = db_session.query(User).filter(User.entity_id == entity.id).first()
+    
+    if user:
+        # Update existing user profile
+        user.name = profile_payload.name
+        user.email = profile_payload.email
+        user.location = profile_payload.location
+        user.updated_at = datetime.utcnow()
+    else:
+        # Create new user profile
+        user = User(
+            name=profile_payload.name,
+            email=profile_payload.email,
+            location=profile_payload.location,
+            entity_id=entity.id,  # type: ignore
+            is_active=True
+        )
+        db_session.add(user)
+    
+    db_session.commit()
+    return user
+
+
+def set_store_profile(entity: PhoneVerification, profile_payload: StoreProfilePayload):
+    """Set store profile for store users"""
+    # Check if store profile already exists
+    store = db_session.query(Store).filter(Store.entity_id == entity.id).first()
+    
+    if store:
+        # Update existing store profile
+        store.name = profile_payload.name
+        store.email = profile_payload.email
+        store.website = profile_payload.website
+        store.location = profile_payload.location
+        store.updated_at = datetime.utcnow()
+    else:
+        # Create new store profile
+        store = Store(
+            name=profile_payload.name,
+            email=profile_payload.email,
+            website=profile_payload.website,
+            location=profile_payload.location,
+            entity_id=entity.id,  # type: ignore
+            is_active=True
+        )
+        db_session.add(store)
+    
+    db_session.commit()
+    return store
+
+
+def set_profile(entity: PhoneVerification, profile_payload: ProfilePayload):
+    """Set profile based on entity type"""
+    if entity.entity_type == "store":
+        # Convert to StoreProfilePayload
+        store_payload = StoreProfilePayload(
+            name=profile_payload.name,
+            email=profile_payload.email,
+            website=profile_payload.website or "",  # Required for store
+            location=profile_payload.location
+        )
+        return set_store_profile(entity, store_payload)
+    else:
+        # Convert to UserProfilePayload
+        user_payload = UserProfilePayload(
+            name=profile_payload.name,
+            email=profile_payload.email,
+            location=profile_payload.location
+        )
+        return set_user_profile(entity, user_payload)
+
+
 # def send_verification_email(email: str, token: str):
 #     # Create a new SES resource
 #     ses_client = boto3.client(
@@ -156,7 +231,7 @@ def send_otp(phone: str) -> str:
     expires_at = datetime.utcnow() + timedelta(minutes=10)
     
     # Check if user already exists with this phone
-    user = db_session.query(Entity1).filter(Entity1.phone == phone).first()
+    user = db_session.query(PhoneVerification).filter(PhoneVerification.phone == phone).first()
     
     if user:
         # Update existing user's OTP
@@ -165,7 +240,7 @@ def send_otp(phone: str) -> str:
         user.is_phone_verified = False
     else:
         # Create a temporary user record for OTP verification
-        user = Entity1(
+        user = PhoneVerification(
             phone=phone,
             otp=otp,
             otp_expires_at=expires_at,
@@ -191,7 +266,7 @@ def send_otp(phone: str) -> str:
 
 def verify_otp(phone: str, otp: str) -> bool:
     """Verify OTP for the given phone number"""
-    user = db_session.query(Entity1).filter(Entity1.phone == phone).first()
+    user = db_session.query(PhoneVerification).filter(PhoneVerification.phone == phone).first()
     
     if not user or not user.otp:
         return False
@@ -215,7 +290,7 @@ def verify_otp(phone: str, otp: str) -> bool:
 
 def get_user_by_phone(phone: str):
     """Get user by phone number"""
-    user = db_session.query(Entity1).filter(Entity1.phone == phone).first()
+    user = db_session.query(PhoneVerification).filter(PhoneVerification.phone == phone).first()
     return user
 
 

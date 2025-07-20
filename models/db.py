@@ -3,8 +3,10 @@ from sqlalchemy_utils import create_database, database_exists
 from sqlmodel import Session, SQLModel, create_engine
 
 from config import DBConfig
-# Import the SQLAlchemy model
-from models.entity.entity1 import Base, Entity1
+# Import all SQLModel models
+from models.entity.phone_verification import PhoneVerification
+from models.entity.user_entity import User
+from models.entity.store_entity import Store
 
 engine = create_engine(
     DBConfig.DB_URL, echo=True, connect_args={"options": "-c search_path=public"}
@@ -19,12 +21,8 @@ def create_db_and_tables():
     # Create schema if it doesn't exist
     with engine.begin() as conn:
         conn.execute(text("CREATE SCHEMA IF NOT EXISTS public"))
-        # No need for explicit commit when using 'begin()'
 
-    # Create SQLAlchemy tables
-    Base.metadata.create_all(bind=engine)
-    
-    # Create SQLModel tables
+    # Create all SQLModel tables
     SQLModel.metadata.create_all(bind=engine)
 
 

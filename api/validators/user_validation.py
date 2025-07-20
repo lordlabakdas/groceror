@@ -1,4 +1,5 @@
 from uuid import UUID
+from typing import Optional, Union
 
 from pydantic import BaseModel
 
@@ -14,7 +15,7 @@ class RegistrationPayload(BaseModel):
 
 
 class RegistrationResponse(BaseModel):
-    id: int
+    id: UUID
 
 
 class SendOTPPayload(BaseModel):
@@ -31,6 +32,30 @@ class VerifyOTPPayload(BaseModel):
 
 
 class VerifyOTPResponse(BaseModel):
+    message: str
+
+
+class UserProfilePayload(BaseModel):
+    name: str
+    email: str
+    location: Optional[str] = None
+
+
+class StoreProfilePayload(BaseModel):
+    name: str
+    email: str
+    website: str
+    location: Optional[str] = None
+
+
+class ProfilePayload(BaseModel):
+    name: str
+    email: str
+    location: Optional[str] = None
+    website: Optional[str] = None  # Only for store users
+
+
+class ProfileResponse(BaseModel):
     message: str
 
 

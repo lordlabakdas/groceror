@@ -15,6 +15,8 @@ from api.validators.user_validation import (
     SendOTPResponse,
     VerifyOTPPayload,
     VerifyOTPResponse,
+    ProfilePayload,
+    ProfileResponse,
 )
 from config import JWTConfig
 from engine import publisher
@@ -22,7 +24,7 @@ from helpers.jwt import JWT, auth_required
 import pika
 import json
 
-from models.entity.entity1 import Entity1
+from models.entity.phone_verification import PhoneVerification
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
@@ -44,6 +46,7 @@ def get_current_user(token: str = Depends(oauth2_scheme)):
         current_user = auth_helper.get_user_by_phone(phone=phone)
         if current_user is None:
             raise credentials_exception
+        return current_user
     except Exception:
         raise credentials_exception
 
@@ -132,17 +135,37 @@ async def register(registration_payload: RegistrationPayload):
         return {"id": new_user.id}
 
 
-# @user_apis.post("/profile")
-# async def profile(profile_payload: ProfilePayload, user: Entity1 = Depends(auth_required)):
-#     logger.info(f"Setting profile for user with payload: {profile_payload}")
-#     try:
-#         auth_helper.set_profile(user=user, profile_payload=profile_payload.dict())
-#     except Exception as e:
-#         logger.exception(f"Error while setting profile for user with exception details {e}")
-#         raise HTTPException(
-#             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-#             detail="Issue with setting profile",
-#         )
+@user_apis.post("/set-profile", response_model=ProfileResponse)
+async def set_profile(
+    profile_payload: ProfilePayload,
+    current_user: PhoneVerification = Depends(get_current_user)
+):
+    """Set profile for both user and store types"""
+    logger.info(f"Setting profile for user type: {current_user.entity_type}")
+    
+    try:
+        # Validate required fields based on entity type
+        if current_user.entity_type == "store" and not profile_payload.website:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Website is required for store profiles"
+            )
+        
+        # Set profile based on entity type
+        auth_helper.set_profile(entity=current_user, profile_payload=profile_payload)
+        
+        entity_type = current_user.entity_type or "user"
+        return {"message": f"{entity_type.capitalize()} profile updated successfully"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Error while setting profile: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Issue with setting profile",
+        )
+
 
 @user_apis.post("/otp")
 async def send_otp_legacy(phone: str):
@@ -172,8 +195,11 @@ async def login(login_payload: LoginPayload):
 @user_apis.put("/change-password", response_model=ChangePasswordResponse)
 async def change_password(
     change_password_payload: ChangePasswordPayload,
-    current_user: str = Depends(get_current_user),
+    current_user: PhoneVerification = Depends(get_current_user),
 ):
     logger.info(f"Changing password for user with payload: {change_password_payload}")
-    auth_helper.change_password(current_user, change_password_payload)
+    # Update the password in the PhoneVerification model
+    current_user.password = auth_helper.hash_password(change_password_payload.new_password)  # type: ignore
+    from models.db import db_session
+    db_session.commit()
     return {"status": "success"}

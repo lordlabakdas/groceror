@@ -16,8 +16,9 @@ class User(SQLModel, table=True):
     id: Optional[uuid.UUID] = Field(default_factory=uuid.uuid4, primary_key=True)
     name: str
     email: str
-    entity_id: int = Field(foreign_key="entity1.id")
+    entity_id: uuid.UUID = Field(foreign_key="phoneverification.id")
     location: Optional[str] = None
+    is_active: bool = Field(default=True)
     created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
     updated_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
     

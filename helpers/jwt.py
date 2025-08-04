@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime, timedelta
 from typing import Dict, Union
 
 import jwt
@@ -46,10 +47,20 @@ class JWT(object):
     def __init__(self) -> None:
         self.algorithm = JWTConfig.JWT_ALGORITHM
         self.secret_key = JWTConfig.JWT_SECRET_KEY
+        self.expiration_hours = 24  # Token expires in 24 hours
 
     def create_token(self, payload: dict) -> str:
+        # Add standard JWT claims
+        now = datetime.utcnow()
+        token_payload = {
+            **payload,
+            "iat": now,  # Issued at
+            "exp": now + timedelta(hours=self.expiration_hours),  # Expiration
+            "nbf": now,  # Not valid before
+            "jti": f"{payload.get('sub', '')}_{now.timestamp()}"  # Unique token ID
+        }
         return jwt.encode(
-            payload=payload, key=self.secret_key, algorithm=self.algorithm
+            payload=token_payload, key=self.secret_key, algorithm=self.algorithm
         )
 
     def decode_token(self, token: str) -> Union[Dict[str, str], None]:

@@ -203,3 +203,11 @@ async def change_password(
     from models.db import db_session
     db_session.commit()
     return {"status": "success"}
+
+
+@user_apis.get("/refresh-token")
+async def refresh_token(current_user: PhoneVerification = Depends(get_current_user)):
+    """Refresh the JWT token"""
+    jwt_obj = JWT()
+    access_token = jwt_obj.create_token(payload={"sub": current_user.phone})
+    return {"token": access_token}

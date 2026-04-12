@@ -1,5 +1,6 @@
 import json
 import logging
+
 import pika
 
 logger = logging.getLogger(__name__)
@@ -10,10 +11,20 @@ def publish_message(event: str, routing_key: str, queue_name: str, **kwargs):
     try:
         connection = pika.BlockingConnection(pika.ConnectionParameters("localhost"))
         channel = connection.channel()
+        
+        # channel.exchange_declare(exchange='dlx', exchange_type='direct')
+        # channel.queue_declare(queue='dead_letter_queue', durable=True)
+        # channel.queue_bind(exchange='dlx', queue='dead_letter_queue', routing_key='dlq')
 
-        # Ensure exchange exists
+        # # Main queue with DLX configuration
+        # args = {
+        #     'x-dead-letter-exchange': 'dlx',
+        #     'x-dead-letter-routing-key': 'dlq',
+        #     'x-message-ttl': 10000,  # Optional: expire messages in 10s
+        # }
+        
         channel.queue_declare(queue=queue_name, durable=True)
-
+        
         # Create message payload
         message = {"event": event, **kwargs}
         # Publish message

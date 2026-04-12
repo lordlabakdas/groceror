@@ -20,7 +20,7 @@ class Inventory(SQLModel, table=True):
     name: str = Field(index=True)
     quantity: int = Field(default=0)
     category: InventoryCategory
-    user_id: UUID = Field(foreign_key="user.id")
+    user_id: Optional[UUID] = Field(default=None, foreign_key="user.id", nullable=True)
     store_id: UUID = Field(foreign_key="store.id")
     price: float = Field(default=0.0)
     notes: Optional[str] = None

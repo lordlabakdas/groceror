@@ -2,6 +2,8 @@ import json
 import logging
 from uuid import UUID
 
+from sqlmodel import select
+
 from api.validators.order_validation import Order
 from models.db import db_session
 from models.entity.orders_entity import Order as OrderEntity
@@ -20,7 +22,7 @@ class OrderService:
     def __init__(self):
         pass
 
-    def create_order(self, order: Order, current_user: str):
+    def create_order(self, order: Order, current_user):
         try:
             order_entity = OrderEntity(
                 order_date=order.order_date,
@@ -38,10 +40,7 @@ class OrderService:
             db_session.rollback()
             raise e
 
-    def get_order_by_id(self, order_id: UUID) -> Order:
-        order = (
-            db_session.query(OrderEntity)
-            .filter(OrderEntity.order_id == order_id)
-            .first()
-        )
-        return order
+    def get_order_by_id(self, order_id: UUID) -> OrderEntity:
+        return db_session.exec(
+            select(OrderEntity).where(OrderEntity.id == order_id)
+        ).first()

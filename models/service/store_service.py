@@ -1,57 +1,32 @@
+import os
 from datetime import datetime
-from typing import List, Optional, Tuple
+from typing import List, Optional
 from uuid import UUID
 
-import requests
 from fastapi import HTTPException, status
-from sqlalchemy import text
+from sqlmodel import select
 
 from models.db import db_session
+from models.entity.phone_verification import PhoneVerification
 from models.entity.store_entity import Store
-from models.entity.user_entity import User
-
-
-def get_coordinates(address: str) -> Tuple[float, float]:
-    # Use Google Maps API to get coordinates
-    url = f"https://maps.googleapis.com/maps/api/geocode/json?address={address}&key={os.getenv('GOOGLE_MAPS_API_KEY')}"
-    try:
-        response = requests.get(url)
-        data = response.json()
-        return (
-            data["results"][0]["geometry"]["location"]["lat"],
-            data["results"][0]["geometry"]["location"]["lng"],
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error getting coordinates: {str(e)}",
-        )
 
 
 class StoreService:
     def create_store(
         self,
         name: str,
-        user_id: UUID,
-        address: str,
-        phone: str,
+        entity_id: UUID,
         email: str,
         website: str = None,
-        latitude: float = None,
-        longitude: float = None,
+        location: str = None,
     ) -> Store:
         try:
-            if latitude is None or longitude is None:
-                latitude, longitude = get_coordinates(address)
             store = Store(
                 name=name,
-                user_id=user_id,
-                address=address,
-                phone=phone,
+                entity_id=entity_id,
                 email=email,
-                website=website,
-                latitude=latitude,
-                longitude=longitude,
+                website=website or "",
+                location=location,
             )
             db_session.add(store)
             db_session.commit()
@@ -65,7 +40,7 @@ class StoreService:
             )
 
     def get_store(self, store_id: UUID) -> Optional[Store]:
-        store = db_session.query(Store).filter(Store.id == store_id).first()
+        store = db_session.exec(select(Store).where(Store.id == store_id)).first()
         if not store:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -73,11 +48,13 @@ class StoreService:
             )
         return store
 
-    def get_stores_by_user(self, user_id: UUID) -> List[Store]:
-        return db_session.query(Store).filter(Store.user_id == user_id).all()
+    def get_stores_by_entity(self, entity_id: UUID) -> List[Store]:
+        return db_session.exec(
+            select(Store).where(Store.entity_id == entity_id)
+        ).all()
 
     def get_store_by_email(self, email: str) -> Optional[Store]:
-        return db_session.query(Store).filter(Store.email == email).first()
+        return db_session.exec(select(Store).where(Store.email == email)).first()
 
     def update_store(self, store_id: UUID, **update_data) -> Store:
         try:
@@ -89,6 +66,8 @@ class StoreService:
             db_session.commit()
             db_session.refresh(store)
             return store
+        except HTTPException:
+            raise
         except Exception as e:
             db_session.rollback()
             raise HTTPException(
@@ -102,6 +81,8 @@ class StoreService:
             db_session.delete(store)
             db_session.commit()
             return True
+        except HTTPException:
+            raise
         except Exception as e:
             db_session.rollback()
             raise HTTPException(
@@ -116,86 +97,26 @@ class StoreService:
         return self.update_store(store_id, is_active=True)
 
     def search_stores(self, query: str) -> List[Store]:
-        return (
-            db_session.query(Store)
-            .filter(
+        return db_session.exec(
+            select(Store).where(
                 (Store.name.ilike(f"%{query}%"))
                 | (Store.email.ilike(f"%{query}%"))
-                | (Store.phone.ilike(f"%{query}%"))
-                | (Store.address.ilike(f"%{query}%"))
+                | (Store.location.ilike(f"%{query}%"))
             )
-            .all()
-        )
+        ).all()
 
-    def find_nearby_stores(
-        self, latitude: float, longitude: float, radius: float = 10.0
-    ) -> List[dict]:
-        """
-        Find stores within specified radius (in kilometers) using Haversine formula
-        """
-        try:
-            # SQL query using Haversine formula
-            query = text(
-                """
-                SELECT 
-                    id,
-                    name,
-                    address,
-                    latitude,
-                    longitude,
-                    phone,
-                    email,
-                    website,
-                    ( 6371 * acos( cos( radians(:lat) ) * 
-                        cos( radians( latitude ) ) * 
-                        cos( radians( longitude ) - radians(:lon) ) + 
-                        sin( radians(:lat) ) * 
-                        sin( radians( latitude ) ) 
-                    )) AS distance 
-                FROM store 
-                WHERE is_active = true
-                HAVING distance <= :radius 
-                ORDER BY distance;
-            """
-            )
-
-            result = db_session.execute(
-                query, {"lat": latitude, "lon": longitude, "radius": radius}
-            )
-
-            stores = []
-            for row in result:
-                store_dict = {
-                    "id": row.id,
-                    "name": row.name,
-                    "address": row.address,
-                    "latitude": row.latitude,
-                    "longitude": row.longitude,
-                    "distance": round(row.distance, 2),  # Round to 2 decimal places
-                    "phone": row.phone,
-                    "email": row.email,
-                    "website": row.website,
-                }
-                stores.append(store_dict)
-
-            return stores
-
-        except Exception as e:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Error finding nearby stores: {str(e)}",
-            )
-
-    def get_store_user_specs(self, store_id: UUID) -> dict:
+    def get_store_owner(self, store_id: UUID) -> PhoneVerification:
         store = self.get_store(store_id)
-        user = db_session.query(User).filter(User.id == store.user_id).first()
-        return {
-            "name": user.name,
-            "email": user.email,
-            "phone": user.phone,
-            "address": user.address,
-        }
+        owner = db_session.exec(
+            select(PhoneVerification).where(PhoneVerification.id == store.entity_id)
+        ).first()
+        if not owner:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Owner for store {store_id} not found",
+            )
+        return owner
 
     def get_store_email(self, store_id: UUID) -> str:
         store = self.get_store(store_id)
-        return db_session.query(User).filter(User.id == store.user_id).first().email
+        return store.email

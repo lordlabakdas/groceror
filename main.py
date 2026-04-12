@@ -15,7 +15,7 @@ from api.inventory_api import inventory_apis
 from api.order_api import order_apis
 from api.store_api import store_apis
 from api.user_api import user_apis
-from models.db import create_db_and_tables
+from models.db import create_db_and_tables, db_session
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -40,6 +40,23 @@ app.add_middleware(
 
 # cred = credentials.Certificate("firebase_service_account.json")
 # firebase_admin.initialize_app(cred)
+
+
+@app.middleware("http")
+async def close_db_session(request, call_next):
+    """Return every thread-local DB session to the pool after each request.
+
+    FastAPI runs synchronous dependencies in thread-pool workers.  Each worker
+    thread acquires its own SQLAlchemy session (via _ThreadLocalSessionProxy).
+    Without explicit cleanup those sessions hold connections open indefinitely,
+    exhausting the pool.  This middleware closes the session for the current
+    thread after the response is sent.
+    """
+    try:
+        response = await call_next(request)
+        return response
+    finally:
+        db_session.remove()
 
 
 @app.get("/")

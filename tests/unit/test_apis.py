@@ -1,8 +1,10 @@
-import pytest
-from fastapi.testclient import TestClient
-from main import app
+"""
+Unit-level API tests for core authentication endpoints.
 
-client = TestClient(app)
+These tests exercise individual endpoints in isolation without relying on
+cross-test fixtures or pre-seeded DB state.
+"""
+from tests._client import client
 
 
 def test_send_otp():
@@ -17,7 +19,7 @@ def test_verify_otp_invalid():
     """Test verifying an invalid OTP"""
     # First send OTP
     client.post("/user/send-otp", json={"phone": "+1234567890"})
-    
+
     # Try to verify with wrong OTP
     response = client.post("/user/verify-otp", json={"phone": "+1234567890", "otp": "000000"})
     assert response.status_code == 400
@@ -34,7 +36,7 @@ def test_registration_without_phone_verification():
     registration_data = {
         "phone": phone,
         "entity_type": "user",
-        "password": "testpassword123"
+        "password": "testpassword123",
     }
 
     response = client.post("/user/register", json=registration_data)
@@ -49,24 +51,23 @@ def test_complete_registration_flow():
     # Step 1: Send OTP
     response = client.post("/user/send-otp", json={"phone": phone})
     assert response.status_code == 200
-    
-    # Step 2: Get the OTP from the console output (in real scenario, this would be sent via SMS)
-    # For testing, we'll use the legacy endpoint to get the OTP
+
+    # Step 2: Get the OTP via legacy endpoint
     otp_response = client.post("/user/otp", params={"phone": phone})
     otp = otp_response.json()["otp"]
-    
+
     # Step 3: Verify OTP
     response = client.post("/user/verify-otp", json={"phone": phone, "otp": otp})
     assert response.status_code == 200
     assert "OTP verified successfully" in response.json()["message"]
-    
+
     # Step 4: Register user
     registration_data = {
         "phone": phone,
         "entity_type": "store",
-        "password": "testpassword123"
+        "password": "testpassword123",
     }
-    
+
     response = client.post("/user/register", json=registration_data)
     assert response.status_code == 200
     assert "id" in response.json()
@@ -80,7 +81,10 @@ def test_login():
     otp_response = client.post("/user/otp", params={"phone": phone})
     otp = otp_response.json()["otp"]
     client.post("/user/verify-otp", json={"phone": phone, "otp": otp})
-    client.post("/user/register", json={"phone": phone, "entity_type": "store", "password": "testpassword123"})
+    client.post(
+        "/user/register",
+        json={"phone": phone, "entity_type": "store", "password": "testpassword123"},
+    )
 
     login_data = {
         "phone": phone,

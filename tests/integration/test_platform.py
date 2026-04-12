@@ -8,145 +8,25 @@ Test coverage:
   - Inventory: add, retrieve, delete (store-owner flow)
   - Cart:      add item, get items, update, remove, clear, totals
   - Orders:    create order (RabbitMQ publisher mocked)
-"""
 
+Fixtures are defined in conftest.py; shared helpers live in helpers.py.
+"""
 import uuid
 from unittest.mock import patch
 
 import pytest
-from fastapi.testclient import TestClient
 
-from main import app
-
-client = TestClient(app)
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Unique phone numbers per test-module run (avoids DB collisions on re-runs)
-# ─────────────────────────────────────────────────────────────────────────────
-_suffix = str(uuid.uuid4().int)[:6]
-USER_PHONE   = f"+1555{_suffix}01"
-STORE_PHONE  = f"+1555{_suffix}02"
-OTHER_PHONE  = f"+1555{_suffix}03"   # second store owner (for 403 tests)
-PASSWORD     = "grocerorTest1!"
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Helpers
-# ─────────────────────────────────────────────────────────────────────────────
-
-def _otp_and_verify(phone: str) -> None:
-    """Send OTP via legacy endpoint (returns OTP directly) and verify it."""
-    r = client.post("/user/otp", params={"phone": phone})
-    assert r.status_code == 200, r.text
-    otp = r.json()["otp"]
-    r = client.post("/user/verify-otp", json={"phone": phone, "otp": otp})
-    assert r.status_code == 200, r.text
-
-
-def _register(phone: str, entity_type: str) -> None:
-    r = client.post(
-        "/user/register",
-        json={"phone": phone, "entity_type": entity_type, "password": PASSWORD},
-    )
-    assert r.status_code == 200, r.text
-
-
-def _login(phone: str) -> str:
-    r = client.post("/user/login", json={"phone": phone, "password": PASSWORD})
-    assert r.status_code == 200, r.text
-    return r.json()["token"]
-
-
-def _headers(token: str) -> dict:
-    return {"Authorization": f"Bearer {token}"}
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Module-scoped fixtures
-# ─────────────────────────────────────────────────────────────────────────────
-
-@pytest.fixture(scope="module")
-def user_token():
-    _otp_and_verify(USER_PHONE)
-    _register(USER_PHONE, "user")
-    return _login(USER_PHONE)
-
-
-@pytest.fixture(scope="module")
-def store_token():
-    _otp_and_verify(STORE_PHONE)
-    _register(STORE_PHONE, "store")
-    return _login(STORE_PHONE)
-
-
-@pytest.fixture(scope="module")
-def other_store_token():
-    """A second store owner used for 403 ownership tests."""
-    _otp_and_verify(OTHER_PHONE)
-    _register(OTHER_PHONE, "store")
-    return _login(OTHER_PHONE)
-
-
-@pytest.fixture(scope="module")
-def user_profile(user_token):
-    """Set and return the user profile."""
-    r = client.post(
-        "/user/set-profile",
-        json={"name": "Test User", "email": "testuser@groceror.test", "location": "User City"},
-        headers=_headers(user_token),
-    )
-    assert r.status_code == 200, r.text
-    return {"name": "Test User", "email": "testuser@groceror.test"}
-
-
-@pytest.fixture(scope="module")
-def store_id(store_token):
-    """Create a store via the API and return its id."""
-    r = client.post(
-        "/stores/",
-        json={
-            "name": "Fresh Market",
-            "email": "fresh@groceror.test",
-            "website": "https://freshmarket.test",
-            "location": "123 Market St",
-        },
-        headers=_headers(store_token),
-    )
-    assert r.status_code == 201, r.text
-    return r.json()["id"]
-
-
-@pytest.fixture(scope="module")
-def store_profile(store_token, store_id):
-    """Set the store profile.
-
-    Depends on store_id so the store already exists; set-profile will
-    update the existing store rather than inserting a second one.
-    """
-    r = client.post(
-        "/user/set-profile",
-        json={
-            "name": "Fresh Market",
-            "email": "fresh@groceror.test",
-            "website": "https://freshmarket.test",
-            "location": "123 Market St",
-        },
-        headers=_headers(store_token),
-    )
-    assert r.status_code == 200, r.text
-    return {"name": "Fresh Market", "email": "fresh@groceror.test"}
-
-
-@pytest.fixture(scope="module")
-def inventory_id(store_token, store_id, store_profile):
-    """Add an inventory item and return its id."""
-    r = client.post(
-        "/inventory/add-inventory",
-        json={"name": "Apples", "quantity": 50, "category": "PRODUCE"},
-        headers=_headers(store_token),
-    )
-    assert r.status_code == 200, r.text
-    return r.json()["inventory_id"]
+from tests.integration.helpers import (
+    PASSWORD,
+    STORE_PHONE,
+    USER_PHONE,
+    _headers,
+    _login,
+    _otp_and_verify,
+    _register,
+    _suffix,
+    client,
+)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -263,7 +143,6 @@ class TestStores:
 
     def test_create_store(self, store_id):
         assert store_id is not None
-        # Validate it's a UUID string
         uuid.UUID(store_id)
 
     def test_get_store_by_id(self, store_id, store_token):
@@ -413,7 +292,6 @@ class TestCart:
 
     def test_cart_requires_user_profile(self, store_token, store_id):
         """A store-type account that has NOT set a profile yet gets 400."""
-        # Register a fresh store with no profile
         phone = f"+1555{_suffix}99"
         _otp_and_verify(phone)
         _register(phone, "store")
@@ -459,7 +337,6 @@ class TestCart:
         assert isinstance(data["total_price"], float)
 
     def test_update_cart_item(self, user_token, user_profile, store_id, inventory_id):
-        # Get the item id first
         items = client.get(f"/cart/{store_id}/items", headers=_headers(user_token)).json()
         item = next(i for i in items if i["inventory_id"] == inventory_id)
         item_id = item["id"]
@@ -549,7 +426,7 @@ class TestOrders:
         assert r.status_code == 401
 
     def test_create_order_requires_profile(self, store_token):
-        """A store account with no profile cannot place orders."""
+        """A user account with no profile cannot place orders."""
         phone = f"+1555{_suffix}98"
         _otp_and_verify(phone)
         _register(phone, "user")

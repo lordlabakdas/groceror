@@ -26,15 +26,17 @@ def test_verify_otp_invalid():
 
 def test_registration_without_phone_verification():
     """Test registration without phone verification should fail"""
+    phone = "+9999999999"
+
+    # Send OTP so the user record exists, but do NOT verify it
+    client.post("/user/send-otp", json={"phone": phone})
+
     registration_data = {
-        "name": "Test User",
-        "email": "test@example.com",
-        "phone": "+1234567890",
-        "address": "123 Test St",
-        "entity_type": "store",
+        "phone": phone,
+        "entity_type": "user",
         "password": "testpassword123"
     }
-    
+
     response = client.post("/user/register", json=registration_data)
     assert response.status_code == 400
     assert "Phone number not verified" in response.json()["detail"]
@@ -43,8 +45,7 @@ def test_registration_without_phone_verification():
 def test_complete_registration_flow():
     """Test complete registration flow with OTP verification"""
     phone = "+1234567890"
-    email = "test@example.com"
-    
+
     # Step 1: Send OTP
     response = client.post("/user/send-otp", json={"phone": phone})
     assert response.status_code == 200
@@ -61,10 +62,7 @@ def test_complete_registration_flow():
     
     # Step 4: Register user
     registration_data = {
-        "name": "Test User",
-        "email": email,
         "phone": phone,
-        "address": "123 Test St",
         "entity_type": "store",
         "password": "testpassword123"
     }
@@ -75,12 +73,20 @@ def test_complete_registration_flow():
 
 
 def test_login():
-    """Test user login"""
+    """Test user login with phone and password after completing the full registration flow."""
+    phone = "+1234567890"
+
+    # Ensure the user is registered and verified (idempotent with test_complete_registration_flow)
+    otp_response = client.post("/user/otp", params={"phone": phone})
+    otp = otp_response.json()["otp"]
+    client.post("/user/verify-otp", json={"phone": phone, "otp": otp})
+    client.post("/user/register", json={"phone": phone, "entity_type": "store", "password": "testpassword123"})
+
     login_data = {
-        "email": "test@example.com",
-        "password": "testpassword123"
+        "phone": phone,
+        "password": "testpassword123",
     }
-    
+
     response = client.post("/user/login", json=login_data)
     assert response.status_code == 200
     assert "token" in response.json()

@@ -93,16 +93,18 @@ async def verify_otp(payload: VerifyOTPPayload):
 async def register(registration_payload: RegistrationPayload):
     logger.info(f"Registering user with payload: {registration_payload}")
     try:
-        # Check if user already exists
+        # Check if user already exists (i.e. OTP has been sent)
         if not auth_helper.is_user_exists(phone=registration_payload.phone):
             raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="User needs to register with OTP first",
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Phone number not found. Please send OTP first.",
             )
         
         # Register the user (this will also verify phone number)
         new_user = auth_helper.register(register_payload=registration_payload.dict())
         
+    except HTTPException:
+        raise
     except ValueError as e:
         if "Phone number not verified" in str(e):
             raise HTTPException(

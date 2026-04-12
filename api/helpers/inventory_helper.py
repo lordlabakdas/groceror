@@ -2,142 +2,107 @@ import logging
 from enum import Enum
 from typing import Dict, List
 
-from helpers.db_helpers import DBHelper
+from sqlmodel import select
+
 from models.db import db_session
 from models.entity.inventory_entity import Inventory, InventoryCategory
+from models.entity.phone_verification import PhoneVerification
 from models.entity.store_entity import Store
-from models.entity.user_entity import User
 
 logger = logging.getLogger()
 
 
-def to_dict(self):
-    return {
-        "name": self.name,
-        "quantity": self.quantity,
-        "category": self.category,
-        "user_id": self.user_id,
-        "notes": self.notes,
-    }
+class InventoryHelper:
+    def __init__(self, user: PhoneVerification) -> None:
+        self.entity = user  # PhoneVerification record from auth_required
 
+        # Look up the Store owned by this entity
+        self.store = db_session.exec(
+            select(Store).where(Store.entity_id == self.entity.id)
+        ).first()
 
-class InventoryHelper(object):
-    def __init__(self, user: User) -> None:
-        self.user = user
-        self.store = (
-            db_session.query(Store).filter(Store.user_id == self.user.id).first()
-        )
+    def _require_store(self) -> Store:
+        if not self.store:
+            raise ValueError("No store found for this account. Set your store profile first.")
+        return self.store
 
     def add_inventory(
         self, name: str, quantity: int, category: Enum, notes: str = None
-    ) -> dict:
-        try:
-            inventory_obj = (
-                db_session.query(Inventory)
-                .join(User)
-                .filter(User.id == self.user.id, Inventory.name == name)
-                .first()
+    ) -> "uuid.UUID":
+        store = self._require_store()
+
+        inventory_obj = db_session.exec(
+            select(Inventory).where(
+                Inventory.store_id == store.id,
+                Inventory.name == name,
             )
-            if inventory_obj:
-                inventory_obj.quantity += quantity
-            else:
-                inventory_obj = Inventory(
-                    name=name,
-                    quantity=quantity,
-                    category=InventoryCategory(category).name,
-                    user_id=self.user.id,
-                    notes=notes,
-                    store_id=self.store.id,
-                )
+        ).first()
+
+        if inventory_obj:
+            inventory_obj.quantity += quantity
+        else:
+            inventory_obj = Inventory(
+                name=name,
+                quantity=quantity,
+                category=InventoryCategory(category).name,
+                store_id=store.id,
+                notes=notes,
+                # user_id is nullable; store inventory is tied to the store
+            )
             db_session.add(inventory_obj)
-            db_session.commit()
-            db_session.refresh(inventory_obj)
-            return inventory_obj.id
-        except Exception as e:
-            logger.exception(f"Error while adding inventory with exception details {e}")
-            raise e
-        finally:
-            db_session.close()
+
+        db_session.commit()
+        db_session.refresh(inventory_obj)
+        return inventory_obj.id
 
     def get_store_inventory(self, items: List[str] = None) -> List[Dict]:
-        try:
-            store_inventory = (
-                db_session.query(Inventory)
-                .join(User)
-                .filter(User.id == self.user.id)
-                .all()
-            )
-            if store_inventory:
-                if items:
-                    store_inventory = store_inventory.filter(
-                        Inventory.name.in_(items)
-                    ).all()
-            else:
-                logger.critical(f"No store inventory found for {self.user}")
-        except Exception as e:
-            logger.exception(f"Error while adding inventory with exception details {e}")
-            raise e
-        else:
-            return [to_dict(inventory) for inventory in store_inventory]
-        finally:
-            db_session.close()
+        store = self._require_store()
+        query = select(Inventory).where(Inventory.store_id == store.id)
+        if items:
+            query = query.where(Inventory.name.in_(items))
+        results = db_session.exec(query).all()
+        return [inv.to_dict() for inv in results]
 
     def get_inventory_by_category(self, category: Enum) -> List[Dict]:
-        try:
-            inventory = (
-                db_session.query(Inventory)
-                .join(User)
-                .filter(User.id == self.user.id, Inventory.category == category)
-                .all()
+        store = self._require_store()
+        results = db_session.exec(
+            select(Inventory).where(
+                Inventory.store_id == store.id,
+                Inventory.category == category,
             )
-        except Exception as e:
-            logger.exception(
-                f"Error while getting inventory by category with exception details {e}"
-            )
-            raise e
-        else:
-            return [inv.to_dict() for inv in inventory]
-        finally:
-            db_session.close()
+        ).all()
+        return [inv.to_dict() for inv in results]
 
     def get_inventory_by_name(self, name: str) -> List[Dict]:
-        try:
-            inventory = (
-                db_session.query(Inventory)
-                .join(User)
-                .filter(User.id == self.user.id, Inventory.name == name)
-                .all()
+        store = self._require_store()
+        results = db_session.exec(
+            select(Inventory).where(
+                Inventory.store_id == store.id,
+                Inventory.name == name,
             )
-        except Exception as e:
-            logger.exception(
-                f"Error while getting inventory by name with exception details {e}"
-            )
-            raise e
-        else:
-            return DBHelper.convert_query_result_to_dict(query_result=inventory)
-        finally:
-            db_session.close()
+        ).all()
+        return [inv.to_dict() for inv in results]
 
-    def update_inventory(self, inventory: dict) -> None:
-        try:
-            db_session.query(Inventory).filter(Inventory.id == inventory.id).update(
-                inventory
+    def update_inventory(self, inventory: Inventory) -> None:
+        store = self._require_store()
+        existing = db_session.exec(
+            select(Inventory).where(
+                Inventory.store_id == store.id,
+                Inventory.id == inventory.id,
             )
-            db_session.commit()
-        except Exception as e:
-            logger.exception(
-                f"Error while updating inventory with exception details {e}"
-            )
-            raise e
-        finally:
-            db_session.close()
+        ).first()
+        if not existing:
+            raise ValueError(f"Inventory item not found")
+        existing.quantity = inventory.quantity
+        existing.price = inventory.price
+        db_session.commit()
 
-    def delete_inventory(self, inventory: dict) -> None:
-        try:
-            db_session.query(Inventory).filter(Inventory.id == inventory.id).delete()
-            db_session.commit()
-        except Exception as e:
-            logger.exception(
-                f"Error while deleting inventory with exception details {e}"
-            )
-            raise e
+    def delete_inventory(self, items: List[str] = None) -> None:
+        store = self._require_store()
+        query = select(Inventory).where(Inventory.store_id == store.id)
+        if items:
+            query = query.where(Inventory.name.in_(items))
+        results = db_session.exec(query).all()
+        for inv in results:
+            db_session.delete(inv)
+        db_session.commit()

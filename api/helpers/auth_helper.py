@@ -1,4 +1,7 @@
 import os
+import random
+import string
+from datetime import datetime, timedelta
 
 import boto3
 from botocore.exceptions import ClientError
@@ -6,10 +9,13 @@ from firebase_admin import auth as firebase_auth
 from google.auth.transport import requests
 from google.oauth2 import id_token
 from passlib.context import CryptContext
+from sqlmodel import select
 
-from api.validators.user_validation import ChangePasswordPayload
+from api.validators.user_validation import ChangePasswordPayload, UserProfilePayload, StoreProfilePayload, ProfilePayload
 from models.db import db_session
-from models.entity.user_entity import User
+from models.entity.phone_verification import PhoneVerification
+from models.entity.user_entity import User, UserType
+from models.entity.store_entity import Store
 
 
 def validate_google_token(token, client_id):
@@ -22,36 +28,30 @@ def validate_google_token(token, client_id):
         return idinfo
 
     except ValueError:
-        # Invalid token
         return None
 
 
-def register(name: str, email: str, address: str, entity_type: str, password: str):
-    user = User(
-        name=name,
-        email=email,
-        address=address,
-        entity_type=entity_type,
-        password=hash_password(password),
-    )
-    db_session.add(user)
+def register(register_payload: dict):
+    user_by_phone = get_user_by_phone(register_payload["phone"])
+    if not user_by_phone:
+        raise ValueError("User not found")
+    if not user_by_phone.is_phone_verified:
+        raise ValueError("Phone number not verified")
+
+    user = user_by_phone
+    user.entity_type = register_payload["entity_type"].value
+    user.password = hash_password(register_payload["password"])
+
     db_session.commit()
     return user
 
 
 def get_user_by_email(email: str):
-    user = db_session.query(User).filter(User.email == email).first()
-    return user
+    return db_session.exec(select(User).where(User.email == email)).first()
 
 
 def get_user_by_id(user_id: str):
-    user = db_session.query(User).filter(User.id == user_id).first()
-    return user
-
-
-def get_user_by_username(username: str):
-    user = db_session.query(User).filter(User.username == username).first()
-    return user
+    return db_session.exec(select(User).where(User.id == user_id)).first()
 
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -65,9 +65,8 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
 
 
-def is_user_exists(email: str) -> bool:
-    user = get_user_by_email(email)
-    return user is not None
+def is_user_exists(phone: str) -> bool:
+    return get_user_by_phone(phone) is not None
 
 
 def register_firebase_user(email: str, password: str):
@@ -85,53 +84,162 @@ def change_password(user: User, change_password_payload: ChangePasswordPayload):
     return user
 
 
-def send_verification_email(email: str, token: str):
-    # Create a new SES resource
-    ses_client = boto3.client(
-        "ses", region_name=os.environ.get("AWS_REGION", "us-east-2")
+def set_user_profile(entity: PhoneVerification, profile_payload: UserProfilePayload):
+    """Set user profile for regular users."""
+    user = db_session.exec(select(User).where(User.entity_id == entity.id)).first()
+
+    if user:
+        user.name = profile_payload.name
+        user.email = profile_payload.email
+        user.location = profile_payload.location
+        user.updated_at = datetime.utcnow()
+    else:
+        user = User(
+            name=profile_payload.name,
+            email=profile_payload.email,
+            location=profile_payload.location,
+            entity_id=entity.id,  # type: ignore
+            is_active=True,
+        )
+        db_session.add(user)
+
+    db_session.commit()
+    return user
+
+
+def set_store_profile(entity: PhoneVerification, profile_payload: StoreProfilePayload):
+    """Set store profile for store users."""
+    store = db_session.exec(select(Store).where(Store.entity_id == entity.id)).first()
+
+    if store:
+        store.name = profile_payload.name
+        store.email = profile_payload.email
+        store.website = profile_payload.website
+        store.location = profile_payload.location
+        store.updated_at = datetime.utcnow()
+    else:
+        store = Store(
+            name=profile_payload.name,
+            email=profile_payload.email,
+            website=profile_payload.website,
+            location=profile_payload.location,
+            entity_id=entity.id,  # type: ignore
+            is_active=True,
+        )
+        db_session.add(store)
+
+    db_session.commit()
+    return store
+
+
+def set_profile(entity: PhoneVerification, profile_payload: ProfilePayload):
+    """Set profile based on entity type."""
+    if entity.entity_type == "store":
+        store_payload = StoreProfilePayload(
+            name=profile_payload.name,
+            email=profile_payload.email,
+            website=profile_payload.website or "",
+            location=profile_payload.location,
+        )
+        return set_store_profile(entity, store_payload)
+    else:
+        user_payload = UserProfilePayload(
+            name=profile_payload.name,
+            email=profile_payload.email,
+            location=profile_payload.location,
+        )
+        return set_user_profile(entity, user_payload)
+
+
+def generate_otp(length: int = 6) -> str:
+    """Generate a random OTP of specified length."""
+    return ''.join(random.choices(string.digits, k=length))
+
+
+def send_otp(phone: str) -> str:
+    """Generate and store OTP for the given phone number."""
+    otp = generate_otp(6)
+    expires_at = datetime.utcnow() + timedelta(minutes=10)
+
+    user = db_session.exec(
+        select(PhoneVerification).where(PhoneVerification.phone == phone)
+    ).first()
+
+    if user:
+        user.otp = otp
+        user.otp_expires_at = expires_at
+        user.is_phone_verified = False
+    else:
+        user = PhoneVerification(
+            phone=phone,
+            otp=otp,
+            otp_expires_at=expires_at,
+            is_phone_verified=False,
+            password="",
+            entity_type="user",
+        )
+        db_session.add(user)
+
+    db_session.commit()
+
+    # In production, send via SNS: send_sms_via_sns(phone, f"Your OTP is: {otp}")
+    print(f"OTP for {phone}: {otp}")
+
+    return otp
+
+
+def verify_otp(phone: str, otp: str) -> bool:
+    """Verify OTP for the given phone number."""
+    user = db_session.exec(
+        select(PhoneVerification).where(PhoneVerification.phone == phone)
+    ).first()
+
+    if not user or not user.otp:
+        return False
+
+    if user.otp_expires_at and datetime.utcnow() > user.otp_expires_at:
+        return False
+
+    if user.otp != otp:
+        return False
+
+    user.is_phone_verified = True
+    user.otp = None
+    user.otp_expires_at = None
+    db_session.commit()
+
+    return True
+
+
+def get_user_by_phone(phone: str):
+    """Get user by phone number."""
+    return db_session.exec(
+        select(PhoneVerification).where(PhoneVerification.phone == phone)
+    ).first()
+
+
+def send_sms_via_sns(phone: str, message: str):
+    """Send SMS via AWS SNS."""
+    sns_client = boto3.client(
+        "sns",
+        region_name=os.environ.get("AWS_REGION", "us-east-1"),
+        aws_access_key_id=os.environ.get("AWS_ACCESS_KEY_ID"),
+        aws_secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY"),
     )
 
-    # The subject line for the email.
-    subject = "Verify your email address"
-
-    # The email body for recipients with non-HTML email clients.
-    body_text = f"Please click the following link to verify your email: {os.environ['BASE_URL']}/verify/{token}"
-
-    # The HTML body of the email.
-    body_html = f"""<html>
-    <head></head>
-    <body>
-        <h1>Verify your email address</h1>
-        <p>Please click the following link to verify your email:</p>
-        <p><a href="{os.environ["BASE_URL"]}/verify/{token}">Verify Email</a></p>
-    </body>
-    </html>
-    """
-
     try:
-        response = ses_client.send_email(
-            Destination={
-                "ToAddresses": [email],
+        response = sns_client.publish(
+            PhoneNumber=phone,
+            Message=message,
+            MessageAttributes={
+                'AWS.SNS.SMS.SMSType': {
+                    'DataType': 'String',
+                    'StringValue': 'Transactional',
+                }
             },
-            Message={
-                "Body": {
-                    "Html": {
-                        "Charset": "UTF-8",
-                        "Data": body_html,
-                    },
-                    "Text": {
-                        "Charset": "UTF-8",
-                        "Data": body_text,
-                    },
-                },
-                "Subject": {
-                    "Charset": "UTF-8",
-                    "Data": subject,
-                },
-            },
-            Source=os.environ.get("SES_SENDER_EMAIL"),
         )
+        print(f"SMS sent successfully. Message ID: {response['MessageId']}")
+        return response
     except ClientError as e:
-        print(f"An error occurred: {e.response['Error']['Message']}")
-    else:
-        print(f"Email sent! Message ID: {response['MessageId']}")
+        print(f"Error sending SMS: {e.response['Error']['Message']}")
+        raise e

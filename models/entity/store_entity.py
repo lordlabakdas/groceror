@@ -1,6 +1,7 @@
 from datetime import datetime
 from typing import List, Optional
 from uuid import UUID, uuid4
+import uuid
 
 from sqlmodel import Field, Relationship, SQLModel
 
@@ -10,21 +11,13 @@ from models.entity.user_entity import User
 class Store(SQLModel, table=True):
     id: Optional[UUID] = Field(default_factory=uuid4, primary_key=True)
     name: str = Field(index=True)
-    user_id: UUID = Field(foreign_key="user.id")
-    # user: User = Relationship(back_populates="stores")
-    address: str = Field(index=True)
-    latitude: float = Field(default=None)
-    longitude: float = Field(default=None)
-    phone: str = Field(index=True)
+    location: Optional[str] = None
     email: str = Field(index=True)
     website: str = Field(index=True)
+    entity_id: uuid.UUID = Field(foreign_key="phoneverification.id")
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     is_active: bool = Field(default=True)
-    latitude: float = Field(default=None)
-    longitude: float = Field(default=None)
-    # user: User = Relationship(back_populates="store")
-    # inventory: List["Inventory"] = Relationship(back_populates="store")
 
     def __repr__(self):
         return f"<Store(id={self.id}, name={self.name})>"
@@ -43,6 +36,3 @@ class Store(SQLModel, table=True):
 
     def get_email(self):
         return self.email
-
-    def get_phone(self):
-        return self.phone

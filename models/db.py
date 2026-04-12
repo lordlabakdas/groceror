@@ -1,30 +1,67 @@
+import threading
+
 from sqlalchemy import text
 from sqlalchemy_utils import create_database, database_exists
-from sqlmodel import Session, SQLModel, create_engine
+from sqlmodel import SQLModel, Session, create_engine
 
 from config import DBConfig
+# Import all SQLModel models so metadata is populated
+from models.entity.phone_verification import PhoneVerification
+from models.entity.user_entity import User
+from models.entity.store_entity import Store
 
 engine = create_engine(
     DBConfig.DB_URL, echo=True, connect_args={"options": "-c search_path=public"}
 )
-db_session = Session(engine)
+
+_local = threading.local()
+
+
+def _get_session() -> Session:
+    """Return the SQLModel Session for the current thread, creating one if needed."""
+    if not getattr(_local, "session", None):
+        _local.session = Session(engine)
+    return _local.session
+
+
+class _ThreadLocalSessionProxy:
+    """Proxy that delegates all attribute access to the thread-local Session.
+
+    This gives every thread its own Session while preserving the simple
+    ``db_session.xxx()`` call convention used throughout the codebase.
+    Call ``db_session.remove()`` at the end of a request to close and
+    discard the thread-local session.
+    """
+
+    def __getattr__(self, name: str):
+        if name == "remove":
+            return self._remove
+        return getattr(_get_session(), name)
+
+    def _remove(self):
+        session = getattr(_local, "session", None)
+        if session is not None:
+            session.close()
+            _local.session = None
+
+
+db_session = _ThreadLocalSessionProxy()
 
 
 def create_db_and_tables():
     if not database_exists(engine.url):
         create_database(engine.url)
 
-    # Create schema if it doesn't exist
     with engine.begin() as conn:
         conn.execute(text("CREATE SCHEMA IF NOT EXISTS public"))
-        # No need for explicit commit when using 'begin()'
 
-    # Create all tables
     SQLModel.metadata.create_all(bind=engine)
 
 
 def get_session():
+    """FastAPI dependency that yields a per-request session."""
+    session = _get_session()
     try:
-        yield db_session
+        yield session
     finally:
-        db_session.close()
+        db_session.remove()

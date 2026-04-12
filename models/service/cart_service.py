@@ -1,8 +1,9 @@
 from datetime import datetime
-from typing import List, Optional
+from typing import List
 from uuid import UUID
 
 from fastapi import HTTPException, status
+from sqlmodel import select
 
 from models.db import db_session
 from models.entity.cart_entity import CartEntity
@@ -17,15 +18,13 @@ class CartService:
         self._active_cart = None
 
     def _get_or_create_cart(self, store_id: UUID) -> CartEntity:
-        cart = (
-            db_session.query(CartEntity)
-            .filter(
+        cart = db_session.exec(
+            select(CartEntity).where(
                 CartEntity.user_id == self.user.id,
                 CartEntity.store_id == store_id,
                 CartEntity.is_active == True,
             )
-            .first()
-        )
+        ).first()
         if not cart:
             cart = CartEntity(user_id=self.user.id, store_id=store_id)
             db_session.add(cart)
@@ -38,17 +37,14 @@ class CartService:
             self._active_cart = self._get_or_create_cart(store_id)
         return self._active_cart
 
-    def add_item(self, store_id: UUID, item_data: dict) -> CartItemEntity:
+    def add_item(self, store_id: UUID, item_data) -> CartItemEntity:
         try:
-            # Verify inventory exists and belongs to the store
-            inventory = (
-                db_session.query(Inventory)
-                .filter(
+            inventory = db_session.exec(
+                select(Inventory).where(
                     Inventory.id == item_data.inventory_id,
                     Inventory.store_id == store_id,
                 )
-                .first()
-            )
+            ).first()
             if not inventory:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
@@ -64,7 +60,6 @@ class CartService:
             cart_item = CartItemEntity(cart_id=cart.id, **item_data.dict())
             db_session.add(cart_item)
 
-            # Update cart totals
             cart.total_quantity += cart_item.quantity
             cart.total_price += cart_item.price * cart_item.quantity
             cart.updated_at = datetime.utcnow()
@@ -72,6 +67,8 @@ class CartService:
             db_session.commit()
             db_session.refresh(cart_item)
             return cart_item
+        except HTTPException:
+            raise
         except Exception as e:
             db_session.rollback()
             raise HTTPException(
@@ -80,39 +77,37 @@ class CartService:
             )
 
     def get_store_carts(self) -> List[CartEntity]:
-        return (
-            db_session.query(CartEntity)
-            .filter(CartEntity.user_id == self.user.id, CartEntity.is_active == True)
-            .all()
-        )
+        return db_session.exec(
+            select(CartEntity).where(
+                CartEntity.user_id == self.user.id,
+                CartEntity.is_active == True,
+            )
+        ).all()
 
     def get_items(self, store_id: UUID) -> List[CartItemEntity]:
         cart = self.get_active_cart(store_id)
         return cart.items
 
-    def update_item(
-        self, store_id: UUID, item_id: UUID, item_data: dict
-    ) -> CartItemEntity:
+    def update_item(self, store_id: UUID, item_id: UUID, item_data) -> CartItemEntity:
         cart = self.get_active_cart(store_id)
         try:
-            cart_item = (
-                db_session.query(CartItemEntity)
-                .filter(CartItemEntity.id == item_id, CartItemEntity.cart_id == cart.id)
-                .first()
-            )
+            cart_item = db_session.exec(
+                select(CartItemEntity).where(
+                    CartItemEntity.id == item_id,
+                    CartItemEntity.cart_id == cart.id,
+                )
+            ).first()
             if not cart_item:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND, detail="Cart item not found"
                 )
 
-            # Update cart totals
             if item_data.quantity is not None:
                 cart.total_quantity += item_data.quantity - cart_item.quantity
                 cart.total_price += cart_item.price * (
                     item_data.quantity - cart_item.quantity
                 )
 
-            # Update cart item
             for key, value in item_data.dict(exclude_unset=True).items():
                 setattr(cart_item, key, value)
             cart_item.updated_at = datetime.utcnow()
@@ -121,6 +116,8 @@ class CartService:
             db_session.commit()
             db_session.refresh(cart_item)
             return cart_item
+        except HTTPException:
+            raise
         except Exception as e:
             db_session.rollback()
             raise HTTPException(
@@ -131,17 +128,17 @@ class CartService:
     def remove_item(self, store_id: UUID, item_id: UUID) -> bool:
         cart = self.get_active_cart(store_id)
         try:
-            cart_item = (
-                db_session.query(CartItemEntity)
-                .filter(CartItemEntity.id == item_id, CartItemEntity.cart_id == cart.id)
-                .first()
-            )
+            cart_item = db_session.exec(
+                select(CartItemEntity).where(
+                    CartItemEntity.id == item_id,
+                    CartItemEntity.cart_id == cart.id,
+                )
+            ).first()
             if not cart_item:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND, detail="Cart item not found"
                 )
 
-            # Update cart totals
             cart.total_quantity -= cart_item.quantity
             cart.total_price -= cart_item.price * cart_item.quantity
             cart.updated_at = datetime.utcnow()
@@ -149,6 +146,8 @@ class CartService:
             db_session.delete(cart_item)
             db_session.commit()
             return True
+        except HTTPException:
+            raise
         except Exception as e:
             db_session.rollback()
             raise HTTPException(
@@ -159,12 +158,14 @@ class CartService:
     def clear(self, store_id: UUID) -> bool:
         cart = self.get_active_cart(store_id)
         try:
-            db_session.query(CartItemEntity).filter(
-                CartItemEntity.cart_id == cart.id
-            ).delete()
+            items = db_session.exec(
+                select(CartItemEntity).where(CartItemEntity.cart_id == cart.id)
+            ).all()
+            for item in items:
+                db_session.delete(item)
 
             cart.total_quantity = 0
-            cart.total_price = 0
+            cart.total_price = 0.0
             cart.updated_at = datetime.utcnow()
 
             db_session.commit()
@@ -177,9 +178,7 @@ class CartService:
             )
 
     def get_total_price(self, store_id: UUID) -> float:
-        cart = self.get_active_cart(store_id)
-        return cart.total_price
+        return self.get_active_cart(store_id).total_price
 
     def get_total_quantity(self, store_id: UUID) -> int:
-        cart = self.get_active_cart(store_id)
-        return cart.total_quantity
+        return self.get_active_cart(store_id).total_quantity

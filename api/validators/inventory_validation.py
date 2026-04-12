@@ -34,3 +34,7 @@ class StoreInventory(BaseModel):
 
 class StoreInventoryResponse(BaseModel):
     inventory: List[StoreInventory]
+
+
+class DeleteInventoryResponse(BaseModel):
+    status: str

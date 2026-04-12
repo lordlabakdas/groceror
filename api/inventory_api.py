@@ -1,15 +1,17 @@
 import logging
-from typing import List
+from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from api.helpers.inventory_helper import InventoryHelper
 from api.validators.inventory_validation import (
     AddInventoryPayload,
     AddInventoryResponse,
+    DeleteInventoryResponse,
     StoreInventoryResponse,
 )
 from helpers.jwt import auth_required
+from models.entity.phone_verification import PhoneVerification
 from models.entity.user_entity import User
 
 logger = logging.getLogger(__name__)
@@ -18,7 +20,7 @@ inventory_apis = APIRouter(prefix="/inventory", tags=["inventory"])
 
 @inventory_apis.post("/add-inventory", response_model=AddInventoryResponse)
 async def add_inventory(
-    add_inventory_payload: AddInventoryPayload, user: User = Depends(auth_required)
+    add_inventory_payload: AddInventoryPayload, user: PhoneVerification = Depends(auth_required)
 ):
     logger.info(f"Adding inventory for user: {add_inventory_payload}")
     try:
@@ -38,10 +40,10 @@ async def add_inventory(
 
 @inventory_apis.get("/get-store-inventory", response_model=StoreInventoryResponse)
 async def get_store_inventory(
-    items: List[str] = None,
+    items: Optional[List[str]] = Query(default=None),
     user: User = Depends(auth_required),
 ):
-    logger.info(f"Getting inventory for store: {user.email}")
+    logger.info(f"Getting inventory for store: {user.phone}")
     try:
         inventory_helper_obj = InventoryHelper(user=user)
         inventory = inventory_helper_obj.get_store_inventory(items=items)
@@ -57,12 +59,12 @@ async def get_store_inventory(
         return StoreInventoryResponse(inventory=inventory)
 
 
-@inventory_apis.delete("/delete-inventory", response_model=StoreInventoryResponse)
+@inventory_apis.delete("/delete-inventory", response_model=DeleteInventoryResponse)
 async def delete_inventory(
-    items: List[str] = None,
+    items: Optional[List[str]] = Query(default=None),
     user: User = Depends(auth_required),
 ):
-    logger.info(f"Deleting inventory for user: {user.email}")
+    logger.info(f"Deleting inventory for user: {user.phone}")
     try:
         inventory_helper_obj = InventoryHelper(user=user)
         inventory_helper_obj.delete_inventory(items=items)

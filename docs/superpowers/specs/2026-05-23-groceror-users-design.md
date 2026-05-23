@@ -219,7 +219,7 @@ No shared state between the two entry points. DB and metrics objects are constru
 | Prefetch count | 1 |
 | Heartbeat | 600s |
 
-groceror-users declares its own queue and DLQ on startup. The `dlx` exchange is declared by groceror's publisher; groceror-users performs a passive re-declaration (same arguments, no conflict).
+groceror-users declares its own queue and DLQ on startup. Both groceror and groceror-users call `exchange_declare(exchange="dlx", exchange_type="direct", durable=True)` — RabbitMQ treats this as idempotent when arguments are identical, so declaration order does not matter.
 
 ---
 
@@ -230,7 +230,7 @@ groceror-users declares its own queue and DLQ on startup. The `dlx` exchange is 
 | RabbitMQ unreachable at startup | Reconnect loop with 5s backoff |
 | Message fails Pydantic validation | NACK `requeue=False` → DLQ; `errors_total{reason="validation"}` incremented |
 | Unknown `schema_version` | NACK `requeue=False` → DLQ; `errors_total{reason="unknown_schema"}` incremented |
-| MongoDB write fails | NACK `requeue=True` (up to 3 retries), then NACK `requeue=False` → DLQ; `errors_total{reason="db"}` incremented |
+| MongoDB write fails | First delivery: NACK `requeue=True`. If `redelivered=True` on second attempt: NACK `requeue=False` → DLQ; `errors_total{reason="db"}` incremented |
 | Consumer thread crashes | `consumer_up` gauge set to 0; FastAPI main thread stays alive, `/metrics` and `/health` remain reachable |
 | Lambda invocation failure | Lambda retries per configured retry policy; Pushgateway push is best-effort (logged, not fatal) |
 | groceror publish fails | groceror logs warning, returns HTTP 200 — user action succeeded. No backfill. |

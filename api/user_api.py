@@ -20,6 +20,7 @@ from api.validators.user_validation import (
 )
 from config import JWTConfig
 from engine import publisher
+from engine.publisher import USER_EVENTS_QUEUE
 from helpers.jwt import JWT, auth_required
 import pika
 import json
@@ -73,6 +74,17 @@ async def verify_otp(payload: VerifyOTPPayload):
     try:
         is_valid = auth_helper.verify_otp(phone=payload.phone, otp=payload.otp)
         if is_valid:
+            user = auth_helper.get_user_by_phone(phone=payload.phone)
+            try:
+                publisher.publish_message(
+                    event="otp_verified",
+                    routing_key=USER_EVENTS_QUEUE,
+                    queue_name=USER_EVENTS_QUEUE,
+                    user_id=str(user.id),
+                    phone=payload.phone,
+                )
+            except Exception:
+                logger.warning("Failed to publish otp_verified for phone=%s", payload.phone)
             return {"message": "OTP verified successfully"}
         else:
             raise HTTPException(
@@ -128,12 +140,17 @@ async def register(registration_payload: RegistrationPayload):
             detail="Issue with registering user",
         )
     else:
-        # publisher.publish_message(
-        #     queue_name="email_queue",
-        #     routing_key="email_queue",
-        #     event="user_registered",
-        #     **new_user.dict(),
-        # )
+        try:
+            publisher.publish_message(
+                event="user_registered",
+                routing_key=USER_EVENTS_QUEUE,
+                queue_name=USER_EVENTS_QUEUE,
+                user_id=str(new_user.id),
+                phone=new_user.phone,
+                entity_type=new_user.entity_type,
+            )
+        except Exception:
+            logger.warning("Failed to publish user_registered for user_id=%s", new_user.id)
         return {"id": new_user.id}
 
 
@@ -154,8 +171,22 @@ async def set_profile(
             )
         
         # Set profile based on entity type
-        auth_helper.set_profile(entity=current_user, profile_payload=profile_payload)
-        
+        result = auth_helper.set_profile(entity=current_user, profile_payload=profile_payload)
+        try:
+            publisher.publish_message(
+                event="profile_updated",
+                routing_key=USER_EVENTS_QUEUE,
+                queue_name=USER_EVENTS_QUEUE,
+                user_id=str(current_user.id),
+                profile_id=str(result.id),
+                entity_type=current_user.entity_type,
+                name=profile_payload.name or "",
+                email=profile_payload.email or "",
+                location=profile_payload.location or "",
+            )
+        except Exception:
+            logger.warning("Failed to publish profile_updated for user_id=%s", current_user.id)
+
         entity_type = current_user.entity_type or "user"
         return {"message": f"{entity_type.capitalize()} profile updated successfully"}
         
@@ -204,6 +235,16 @@ async def change_password(
     current_user.password = auth_helper.hash_password(change_password_payload.new_password)  # type: ignore
     from models.db import db_session
     db_session.commit()
+    try:
+        publisher.publish_message(
+            event="password_changed",
+            routing_key=USER_EVENTS_QUEUE,
+            queue_name=USER_EVENTS_QUEUE,
+            user_id=str(current_user.id),
+            phone=current_user.phone,
+        )
+    except Exception:
+        logger.warning("Failed to publish password_changed for user_id=%s", current_user.id)
     return {"status": "success"}
 
 

@@ -87,8 +87,6 @@ class FirebaseLoginResponse(BaseModel):
 
 
 class ChangePasswordPayload(BaseModel):
-    username: str
-    old_password: str
     new_password: str
 
 

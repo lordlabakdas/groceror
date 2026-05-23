@@ -20,10 +20,7 @@ from api.validators.user_validation import (
 )
 from config import JWTConfig
 from engine import publisher
-from engine.publisher import USER_EVENTS_QUEUE
 from helpers.jwt import JWT, auth_required
-import pika
-import json
 
 from models.entity.phone_verification import PhoneVerification
 
@@ -75,16 +72,17 @@ async def verify_otp(payload: VerifyOTPPayload):
         is_valid = auth_helper.verify_otp(phone=payload.phone, otp=payload.otp)
         if is_valid:
             user = auth_helper.get_user_by_phone(phone=payload.phone)
-            try:
-                publisher.publish_message(
-                    event="otp_verified",
-                    routing_key=USER_EVENTS_QUEUE,
-                    queue_name=USER_EVENTS_QUEUE,
-                    user_id=str(user.id),
-                    phone=payload.phone,
-                )
-            except Exception:
-                logger.warning("Failed to publish otp_verified for phone=%s", payload.phone)
+            if user:
+                try:
+                    publisher.publish_message(
+                        event="otp_verified",
+                        routing_key=publisher.USER_EVENTS_QUEUE,
+                        queue_name=publisher.USER_EVENTS_QUEUE,
+                        user_id=str(user.id),
+                        phone=payload.phone,
+                    )
+                except Exception:
+                    logger.warning("Failed to publish otp_verified for phone=%s", payload.phone)
             return {"message": "OTP verified successfully"}
         else:
             raise HTTPException(
@@ -143,8 +141,8 @@ async def register(registration_payload: RegistrationPayload):
         try:
             publisher.publish_message(
                 event="user_registered",
-                routing_key=USER_EVENTS_QUEUE,
-                queue_name=USER_EVENTS_QUEUE,
+                routing_key=publisher.USER_EVENTS_QUEUE,
+                queue_name=publisher.USER_EVENTS_QUEUE,
                 user_id=str(new_user.id),
                 phone=new_user.phone,
                 entity_type=new_user.entity_type,
@@ -175,8 +173,8 @@ async def set_profile(
         try:
             publisher.publish_message(
                 event="profile_updated",
-                routing_key=USER_EVENTS_QUEUE,
-                queue_name=USER_EVENTS_QUEUE,
+                routing_key=publisher.USER_EVENTS_QUEUE,
+                queue_name=publisher.USER_EVENTS_QUEUE,
                 user_id=str(current_user.id),
                 profile_id=str(result.id),
                 entity_type=current_user.entity_type,
@@ -238,8 +236,8 @@ async def change_password(
     try:
         publisher.publish_message(
             event="password_changed",
-            routing_key=USER_EVENTS_QUEUE,
-            queue_name=USER_EVENTS_QUEUE,
+            routing_key=publisher.USER_EVENTS_QUEUE,
+            queue_name=publisher.USER_EVENTS_QUEUE,
             user_id=str(current_user.id),
             phone=current_user.phone,
         )

@@ -69,6 +69,10 @@ def test_set_profile_publishes_profile_updated():
     assert kw["queue_name"] == "user_events_queue"
     assert kw["name"] == "Alice"
     assert "user_id" in kw
+    assert kw["profile_id"] is not None
+    assert kw["entity_type"] == "user"
+    assert kw["email"] == "alice@example.com"
+    assert kw["location"] == "NYC"
 
 
 def test_change_password_publishes_password_changed():

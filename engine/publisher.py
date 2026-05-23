@@ -9,7 +9,7 @@ Uses one thread-local BlockingConnection per worker thread so that:
 Every published message includes a ``schema_version`` field so that consumers
 can reject or handle messages from older/newer producer versions gracefully.
 
-Dead-letter exchange (``dlx``) and dead-letter queue (``order_queue.dlq``) are
+Dead-letter exchange (``dlx``) and dead-letter queues (``order_queue.dlq``, ``user_events_queue.dlq``) are
 declared on first use so that NACKed or expired messages are never silently
 dropped.
 """

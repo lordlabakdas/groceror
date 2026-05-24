@@ -91,3 +91,21 @@ groceror publishes an event to RabbitMQ on this endpoint:
 | `POST /order/create-order` | `order_created` |
 
 See the [groceror-orders README](https://github.com/lordlabakdas/groceror-orders) for setup and running instructions.
+
+### groceror-email
+
+[groceror-email](https://github.com/lordlabakdas/groceror-email) is a generic SMTP email relay microservice. Any service publishes `{recipient, subject, body}` to `email_queue` and groceror-email delivers it via SMTP STARTTLS. It exposes a Grafana dashboard via Prometheus metrics and supports AWS Lambda deployment.
+
+Use `EmailClient` from `groceror-email/client.py` to send emails from groceror:
+
+```python
+from client import EmailClient
+
+EmailClient().send(
+    recipient="user@example.com",
+    subject="Welcome to groceror",
+    body="Hello, your account is ready.",
+)
+```
+
+See the [groceror-email README](https://github.com/lordlabakdas/groceror-email) for setup and running instructions.

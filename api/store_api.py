@@ -42,6 +42,14 @@ async def create_store(
     return store_service.create_store(entity_id=current_user.id, **store_data.dict())
 
 
+@store_apis.get("/")
+async def list_all_stores(
+    current_user: PhoneVerification = Depends(auth_required),
+):
+    store_service = StoreService()
+    return store_service.get_all_active_stores()
+
+
 @store_apis.get("/search/{query}")
 async def search_stores(
     query: str,

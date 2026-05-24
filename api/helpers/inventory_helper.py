@@ -27,7 +27,7 @@ class InventoryHelper:
         return self.store
 
     def add_inventory(
-        self, name: str, quantity: int, category: Enum, notes: str = None
+        self, name: str, quantity: int, category: Enum, price: float = 0.0, notes: str = None
     ) -> "uuid.UUID":
         store = self._require_store()
 
@@ -40,14 +40,16 @@ class InventoryHelper:
 
         if inventory_obj:
             inventory_obj.quantity += quantity
+            if price > 0:
+                inventory_obj.price = price
         else:
             inventory_obj = Inventory(
                 name=name,
                 quantity=quantity,
                 category=InventoryCategory(category).name,
                 store_id=store.id,
+                price=price,
                 notes=notes,
-                # user_id is nullable; store inventory is tied to the store
             )
             db_session.add(inventory_obj)
 

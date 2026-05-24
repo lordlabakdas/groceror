@@ -10,6 +10,7 @@ class AddInventoryPayload(BaseModel):
     name: str
     quantity: int
     category: InventoryCategory
+    price: float = 0.0
     notes: Optional[str] = None
 
     @validator("category")

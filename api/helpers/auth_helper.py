@@ -151,6 +151,21 @@ def set_profile(entity: PhoneVerification, profile_payload: ProfilePayload):
         return set_user_profile(entity, user_payload)
 
 
+def get_profile(entity: PhoneVerification) -> dict:
+    """Return profile fields for the entity's User or Store record."""
+    if entity.entity_type == "store":
+        store = db_session.exec(select(Store).where(Store.entity_id == entity.id)).first()
+        if store:
+            return {"name": store.name, "email": store.email,
+                    "location": store.location, "website": store.website}
+        return {"name": None, "email": None, "location": None, "website": None}
+    else:
+        user = db_session.exec(select(User).where(User.entity_id == entity.id)).first()
+        if user:
+            return {"name": user.name, "email": user.email, "location": user.location}
+        return {"name": None, "email": None, "location": None}
+
+
 def generate_otp(length: int = 6) -> str:
     """Generate a random OTP of specified length."""
     return ''.join(random.choices(string.digits, k=length))

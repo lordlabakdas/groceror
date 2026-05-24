@@ -9,6 +9,7 @@ from api.validators.user_validation import (
     ChangePasswordResponse,
     LoginPayload,
     LoginResponse,
+    MeResponse,
     RegistrationPayload,
     RegistrationResponse,
     SendOTPPayload,
@@ -150,6 +151,12 @@ async def register(registration_payload: RegistrationPayload):
         except Exception:
             logger.warning("Failed to publish user_registered for user_id=%s", new_user.id)
         return {"id": new_user.id}
+
+
+@user_apis.get("/me", response_model=MeResponse)
+async def get_me(current_user: PhoneVerification = Depends(get_current_user)):
+    profile = auth_helper.get_profile(current_user)
+    return MeResponse(phone=current_user.phone, entity_type=current_user.entity_type, **profile)
 
 
 @user_apis.post("/set-profile", response_model=ProfileResponse)

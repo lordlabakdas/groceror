@@ -9,9 +9,9 @@ Uses one thread-local BlockingConnection per worker thread so that:
 Every published message includes a ``schema_version`` field so that consumers
 can reject or handle messages from older/newer producer versions gracefully.
 
-Dead-letter exchange (``dlx``) and dead-letter queues (``order_queue.dlq``, ``user_events_queue.dlq``) are
-declared on first use so that NACKed or expired messages are never silently
-dropped.
+Dead-letter exchange (``dlx``) and dead-letter queues (``order_queue.dlq``,
+``user_events_queue.dlq``, ``email_queue.dlq``) are declared on first use so
+that NACKed or expired messages are never silently dropped.
 """
 
 import json
@@ -30,6 +30,8 @@ DLX_EXCHANGE   = "dlx"
 DLQ_NAME       = "order_queue.dlq"
 USER_EVENTS_QUEUE = "user_events_queue"
 USER_EVENTS_DLQ   = "user_events_queue.dlq"
+EMAIL_QUEUE = "email_queue"
+EMAIL_DLQ   = "email_queue.dlq"
 
 _local = threading.local()
 
@@ -71,6 +73,9 @@ def _declare_topology(channel: pika.adapters.blocking_connection.BlockingChannel
     # user events DLQ
     channel.queue_declare(queue=USER_EVENTS_DLQ, durable=True)
     channel.queue_bind(exchange=DLX_EXCHANGE, queue=USER_EVENTS_DLQ, routing_key=USER_EVENTS_QUEUE)
+    # email events DLQ
+    channel.queue_declare(queue=EMAIL_DLQ, durable=True)
+    channel.queue_bind(exchange=DLX_EXCHANGE, queue=EMAIL_DLQ, routing_key=EMAIL_QUEUE)
 
 
 def _declare_queue(

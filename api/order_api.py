@@ -29,15 +29,15 @@ def _get_user_profile(entity: PhoneVerification = Depends(auth_required)) -> Use
     return user
 
 
-def serialize_for_json(obj):
-    """Recursively serialize objects for JSON."""
+def _serialize(obj):
+    """Recursively convert UUIDs and datetimes to JSON-safe types."""
     if isinstance(obj, uuid.UUID):
         return str(obj)
-    elif isinstance(obj, list):
-        return [serialize_for_json(item) for item in obj]
-    elif isinstance(obj, dict):
-        return {key: serialize_for_json(value) for key, value in obj.items()}
-    elif hasattr(obj, "isoformat"):
+    if isinstance(obj, list):
+        return [_serialize(item) for item in obj]
+    if isinstance(obj, dict):
+        return {k: _serialize(v) for k, v in obj.items()}
+    if hasattr(obj, "isoformat"):
         return obj.isoformat()
     return obj
 
@@ -50,16 +50,28 @@ async def create_order(
     logger.info(f"Creating order for user {current_user.id}")
 
     order_service = OrderService()
-    order_service.create_order(order, current_user)
+    order_entity = order_service.create_order(order, current_user)
 
-    order_dict = serialize_for_json(order.dict())
-    order_dict["user_id"] = str(current_user.id)
+    # Build the message payload using the DB-assigned id as order_id.
+    order_dict = _serialize(order.dict())
+    order_dict["order_id"]  = str(order_entity.id)
+    order_dict["user_id"]   = str(current_user.id)
     order_dict["order_date"] = order.order_date.isoformat()
 
-    publisher.publish_message(
-        queue_name="order_queue",
-        routing_key="order_queue",
-        event="order_created",
-        **order_dict,
-    )
+    try:
+        publisher.publish_message(
+            queue_name="order_queue",
+            routing_key="order_queue",
+            event="order_created",
+            **order_dict,
+        )
+    except Exception:
+        # Order is already persisted in PostgreSQL; a publish failure is
+        # logged by the publisher.  We warn here so it appears in request
+        # logs but do not fail the HTTP response.
+        logger.warning(
+            "order_id=%s was saved but could not be published to RabbitMQ",
+            order_entity.id,
+        )
+
     return order

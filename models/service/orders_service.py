@@ -22,7 +22,8 @@ class OrderService:
     def __init__(self):
         pass
 
-    def create_order(self, order: Order, current_user):
+    def create_order(self, order: Order, current_user) -> OrderEntity:
+        """Persist the order and return the saved entity (with its DB-assigned id)."""
         try:
             order_entity = OrderEntity(
                 order_date=order.order_date,
@@ -35,6 +36,8 @@ class OrderService:
             )
             db_session.add(order_entity)
             db_session.commit()
+            db_session.refresh(order_entity)
+            return order_entity
         except Exception as e:
             logger.error(f"Error creating order: {e}")
             db_session.rollback()

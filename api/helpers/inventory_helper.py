@@ -1,4 +1,6 @@
 import logging
+import uuid
+from datetime import datetime
 from enum import Enum
 from typing import Dict, List
 
@@ -84,6 +86,23 @@ class InventoryHelper:
             )
         ).all()
         return [inv.to_dict() for inv in results]
+
+    def update_inventory_fields(
+        self, inventory_id: uuid.UUID, quantity: int, price: float
+    ) -> None:
+        store = self._require_store()
+        existing = db_session.exec(
+            select(Inventory).where(
+                Inventory.store_id == store.id,
+                Inventory.id == inventory_id,
+            )
+        ).first()
+        if not existing:
+            raise ValueError("Inventory item not found")
+        existing.quantity = quantity
+        existing.price = price
+        existing.updated_at = datetime.utcnow()
+        db_session.commit()
 
     def update_inventory(self, inventory: Inventory) -> None:
         store = self._require_store()

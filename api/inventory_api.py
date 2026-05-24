@@ -1,6 +1,8 @@
 import logging
 from typing import List, Optional
 
+from uuid import UUID
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from api.helpers.inventory_helper import InventoryHelper
@@ -9,6 +11,8 @@ from api.validators.inventory_validation import (
     AddInventoryResponse,
     DeleteInventoryResponse,
     StoreInventoryResponse,
+    UpdateInventoryPayload,
+    UpdateInventoryResponse,
 )
 from helpers.jwt import auth_required
 from models.entity.phone_verification import PhoneVerification
@@ -57,6 +61,30 @@ async def get_store_inventory(
         )
     else:
         return StoreInventoryResponse(inventory=inventory)
+
+
+@inventory_apis.put("/{inventory_id}", response_model=UpdateInventoryResponse)
+async def update_inventory(
+    inventory_id: UUID,
+    payload: UpdateInventoryPayload,
+    user: PhoneVerification = Depends(auth_required),
+):
+    try:
+        inventory_helper_obj = InventoryHelper(user=user)
+        inventory_helper_obj.update_inventory_fields(
+            inventory_id=inventory_id,
+            quantity=payload.quantity,
+            price=payload.price,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        logger.exception(f"Error updating inventory: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Issue updating inventory",
+        )
+    return {"status": "success"}
 
 
 @inventory_apis.delete("/delete-inventory", response_model=DeleteInventoryResponse)

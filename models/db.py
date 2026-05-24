@@ -57,6 +57,11 @@ def create_db_and_tables():
 
     SQLModel.metadata.create_all(bind=engine)
 
+    # Idempotent column additions for fields added after initial table creation.
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE store ADD COLUMN IF NOT EXISTS latitude FLOAT"))
+        conn.execute(text("ALTER TABLE store ADD COLUMN IF NOT EXISTS longitude FLOAT"))
+
 
 def get_session():
     """FastAPI dependency that yields a per-request session."""

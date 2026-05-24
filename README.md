@@ -52,5 +52,23 @@ $ pip install -r requirements.txt
 $ uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-6. Access the application
-ow you can access the application at `http://localhost:8000` or `http://<public-ip>:8000`
+6. Access the application at `http://localhost:8000` or `http://<public-ip>:8000`
+
+-----
+
+## Related services
+
+### groceror-users
+
+[groceror-users](https://github.com/lordlabakdas/groceror-users) is a companion microservice that consumes user lifecycle events published by groceror, stores them as an immutable event log in MongoDB, and exposes a Grafana dashboard via Prometheus metrics.
+
+groceror publishes an event to RabbitMQ on each of these endpoints:
+
+| Endpoint | Event |
+|---|---|
+| `POST /user/register` | `user_registered` |
+| `POST /user/verify-otp` | `otp_verified` |
+| `POST /user/set-profile` | `profile_updated` |
+| `PUT /user/change-password` | `password_changed` |
+
+See the [groceror-users README](https://github.com/lordlabakdas/groceror-users) for setup and running instructions.

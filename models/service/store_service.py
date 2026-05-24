@@ -96,6 +96,11 @@ class StoreService:
     def activate_store(self, store_id: UUID) -> Store:
         return self.update_store(store_id, is_active=True)
 
+    def get_all_active_stores(self) -> List[Store]:
+        return db_session.exec(
+            select(Store).where(Store.is_active == True)
+        ).all()
+
     def search_stores(self, query: str) -> List[Store]:
         return db_session.exec(
             select(Store).where(

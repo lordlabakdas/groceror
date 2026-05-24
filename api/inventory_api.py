@@ -4,17 +4,21 @@ from typing import List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlmodel import select
 
 from api.helpers.inventory_helper import InventoryHelper
 from api.validators.inventory_validation import (
     AddInventoryPayload,
     AddInventoryResponse,
     DeleteInventoryResponse,
+    StoreInventory,
     StoreInventoryResponse,
     UpdateInventoryPayload,
     UpdateInventoryResponse,
 )
 from helpers.jwt import auth_required
+from models.db import db_session
+from models.entity.inventory_entity import Inventory
 from models.entity.phone_verification import PhoneVerification
 from models.entity.user_entity import User
 
@@ -85,6 +89,17 @@ async def update_inventory(
             detail="Issue updating inventory",
         )
     return {"status": "success"}
+
+
+@inventory_apis.get("/browse/{store_id}", response_model=StoreInventoryResponse)
+async def browse_store_inventory(
+    store_id: UUID,
+    user: PhoneVerification = Depends(auth_required),
+):
+    items = db_session.exec(
+        select(Inventory).where(Inventory.store_id == store_id)
+    ).all()
+    return StoreInventoryResponse(inventory=[StoreInventory(**item.to_dict()) for item in items])
 
 
 @inventory_apis.delete("/delete-inventory", response_model=DeleteInventoryResponse)

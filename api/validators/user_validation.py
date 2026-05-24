@@ -86,6 +86,15 @@ class FirebaseLoginResponse(BaseModel):
     token: str
 
 
+class MeResponse(BaseModel):
+    phone: str
+    entity_type: str
+    name: Optional[str] = None
+    email: Optional[str] = None
+    location: Optional[str] = None
+    website: Optional[str] = None
+
+
 class ChangePasswordPayload(BaseModel):
     new_password: str
 

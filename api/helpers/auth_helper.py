@@ -1,7 +1,11 @@
+import json
 import os
 import random
 import string
+import urllib.parse
+import urllib.request
 from datetime import datetime, timedelta
+from typing import Optional, Tuple
 
 import boto3
 from botocore.exceptions import ClientError
@@ -107,9 +111,28 @@ def set_user_profile(entity: PhoneVerification, profile_payload: UserProfilePayl
     return user
 
 
+def geocode_location(location: str) -> Optional[Tuple[float, float]]:
+    """Return (latitude, longitude) for a location string using Nominatim, or None."""
+    try:
+        params = urllib.parse.urlencode({"q": location, "format": "json", "limit": 1})
+        req = urllib.request.Request(
+            f"https://nominatim.openstreetmap.org/search?{params}",
+            headers={"User-Agent": "groceror/1.0"},
+        )
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            results = json.loads(resp.read())
+        if results:
+            return float(results[0]["lat"]), float(results[0]["lon"])
+    except Exception:
+        pass
+    return None
+
+
 def set_store_profile(entity: PhoneVerification, profile_payload: StoreProfilePayload):
     """Set store profile for store users."""
     store = db_session.exec(select(Store).where(Store.entity_id == entity.id)).first()
+
+    coords = geocode_location(profile_payload.location) if profile_payload.location else None
 
     if store:
         store.name = profile_payload.name
@@ -117,7 +140,10 @@ def set_store_profile(entity: PhoneVerification, profile_payload: StoreProfilePa
         store.website = profile_payload.website
         store.location = profile_payload.location
         store.updated_at = datetime.utcnow()
+        if coords:
+            store.latitude, store.longitude = coords
     else:
+        lat, lon = coords if coords else (None, None)
         store = Store(
             name=profile_payload.name,
             email=profile_payload.email,
@@ -125,6 +151,8 @@ def set_store_profile(entity: PhoneVerification, profile_payload: StoreProfilePa
             location=profile_payload.location,
             entity_id=entity.id,  # type: ignore
             is_active=True,
+            latitude=lat,
+            longitude=lon,
         )
         db_session.add(store)
 

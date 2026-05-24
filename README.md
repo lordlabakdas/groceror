@@ -48,11 +48,18 @@ $ pip install -r requirements.txt
 
 ## Running the application
 5. Run the application
+
 ```bash
+# recommended — uses the Makefile
+$ make run
+
+# or directly
 $ uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 6. Access the application at `http://localhost:8000` or `http://<public-ip>:8000`
+
+Run `make help` to see all available targets.
 
 -----
 

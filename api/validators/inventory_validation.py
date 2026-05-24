@@ -26,9 +26,12 @@ class AddInventoryResponse(BaseModel):
 
 
 class StoreInventory(BaseModel):
+    id: UUID
     name: str
     quantity: int
     category: InventoryCategory
+    price: float
+    store_id: UUID
     notes: Optional[str] = None
 
 

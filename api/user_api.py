@@ -219,7 +219,9 @@ async def login(login_payload: LoginPayload):
         )
 
     jwt_obj = JWT()
-    access_token = jwt_obj.create_token(payload={"sub": user.phone})
+    access_token = jwt_obj.create_token(
+        payload={"sub": user.phone, "entity_type": user.entity_type or "user"}
+    )
     return {"token": access_token}
 
 
@@ -250,5 +252,7 @@ async def change_password(
 async def refresh_token(current_user: PhoneVerification = Depends(get_current_user)):
     """Refresh the JWT token"""
     jwt_obj = JWT()
-    access_token = jwt_obj.create_token(payload={"sub": current_user.phone})
+    access_token = jwt_obj.create_token(
+        payload={"sub": current_user.phone, "entity_type": current_user.entity_type or "user"}
+    )
     return {"token": access_token}

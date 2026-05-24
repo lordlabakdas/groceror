@@ -55,3 +55,15 @@ class JWTConfig(object):
 
     JWT_ALGORITHM = CONFIG.get("groceror").get("jwt").get("JWT_ALGORITHM")
     JWT_SECRET_KEY = CONFIG.get("groceror").get("jwt").get("JWT_SECRET_KEY")
+
+
+@dataclass
+class RabbitMQConfig(object):
+    """RabbitMQ connection configuration"""
+
+    _rmq = CONFIG.get("groceror").get("rabbitmq", {})
+    HOST     = _rmq.get("host", "localhost")
+    PORT     = int(_rmq.get("port", 5672))
+    USER     = _rmq.get("user", "guest")
+    PASSWORD = _rmq.get("password", "guest")
+    VHOST    = _rmq.get("virtual_host", "/")

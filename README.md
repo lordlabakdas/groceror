@@ -72,3 +72,15 @@ groceror publishes an event to RabbitMQ on each of these endpoints:
 | `PUT /user/change-password` | `password_changed` |
 
 See the [groceror-users README](https://github.com/lordlabakdas/groceror-users) for setup and running instructions.
+
+### groceror-orders
+
+[groceror-orders](https://github.com/lordlabakdas/groceror-orders) is a companion microservice that consumes order events published by groceror, stores them in MongoDB, and exposes analytics endpoints and a Grafana dashboard via Prometheus metrics.
+
+groceror publishes an event to RabbitMQ on this endpoint:
+
+| Endpoint | Event |
+|---|---|
+| `POST /order/create-order` | `order_created` |
+
+See the [groceror-orders README](https://github.com/lordlabakdas/groceror-orders) for setup and running instructions.

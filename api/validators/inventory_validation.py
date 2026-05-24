@@ -40,5 +40,14 @@ class StoreInventoryResponse(BaseModel):
     inventory: List[StoreInventory]
 
 
+class UpdateInventoryPayload(BaseModel):
+    quantity: int
+    price: float
+
+
+class UpdateInventoryResponse(BaseModel):
+    status: str
+
+
 class DeleteInventoryResponse(BaseModel):
     status: str

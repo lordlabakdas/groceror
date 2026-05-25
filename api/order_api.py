@@ -5,15 +5,34 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import select
 
 from helpers.jwt import auth_required
-from api.validators.order_validation import Order, OrderHistoryItem, OrderHistoryResponse
+from api.validators.order_validation import (
+    Order, OrderHistoryItem, OrderHistoryResponse,
+    StoreOrderItem, StoreOrdersResponse,
+    UpdateOrderStatusPayload, UpdateOrderStatusResponse,
+    VALID_STATUSES,
+)
 from engine import publisher
 from models.db import db_session
+from models.entity.inventory_entity import Inventory
 from models.entity.phone_verification import PhoneVerification
+from models.entity.store_entity import Store
 from models.entity.user_entity import User
 from models.service.orders_service import OrderService
 
 logger = logging.getLogger(__name__)
 order_apis = APIRouter(prefix="/order", tags=["order"])
+
+
+def _get_store_profile(entity: PhoneVerification = Depends(auth_required)) -> Store:
+    if entity.entity_type != "store":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Store access only")
+    store = db_session.exec(select(Store).where(Store.entity_id == entity.id)).first()
+    if not store:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Store profile not set. Call /user/set-profile first.",
+        )
+    return store
 
 
 def _get_user_profile(entity: PhoneVerification = Depends(auth_required)) -> User:
@@ -95,3 +114,60 @@ async def create_order(
         )
 
     return order
+
+
+@order_apis.get("/store-orders", response_model=StoreOrdersResponse)
+async def get_store_orders(current_store: Store = Depends(_get_store_profile)):
+    order_service = OrderService()
+    orders = order_service.get_orders_by_store(current_store.id)
+
+    # Collect all unique inventory IDs across all orders to batch-resolve names.
+    all_item_ids = {item_id for o in orders for item_id in (o.items or [])}
+    inventory_map: dict[str, str] = {}
+    if all_item_ids:
+        rows = db_session.exec(
+            select(Inventory).where(Inventory.id.in_(all_item_ids))
+        ).all()
+        inventory_map = {str(row.id): row.name for row in rows}
+
+    return StoreOrdersResponse(
+        orders=[
+            StoreOrderItem(
+                id=o.id,
+                total_price=o.total_price,
+                status=o.status,
+                item_names=[inventory_map.get(item_id, item_id) for item_id in (o.items or [])],
+                order_date=o.order_date,
+            )
+            for o in orders
+        ]
+    )
+
+
+@order_apis.put("/{order_id}/status", response_model=UpdateOrderStatusResponse)
+async def update_order_status(
+    order_id: uuid.UUID,
+    payload: UpdateOrderStatusPayload,
+    current_store: Store = Depends(_get_store_profile),
+):
+    if payload.status not in VALID_STATUSES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid status. Must be one of: {', '.join(sorted(VALID_STATUSES))}",
+        )
+    order_service = OrderService()
+    updated = order_service.update_order_status(order_id, current_store.id, payload.status)
+    if not updated:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
+    try:
+        publisher.publish_message(
+            queue_name="order_queue",
+            routing_key="order_queue",
+            event="order_status_updated",
+            order_id=str(order_id),
+            store_id=str(current_store.id),
+            status=payload.status,
+        )
+    except Exception:
+        logger.warning("order_id=%s status updated but could not be published", order_id)
+    return UpdateOrderStatusResponse(message="Status updated", status=updated.status)

@@ -193,7 +193,13 @@ async def set_profile(
             logger.warning("Failed to publish profile_updated for user_id=%s", current_user.id)
 
         entity_type = current_user.entity_type or "user"
-        return {"message": f"{entity_type.capitalize()} profile updated successfully"}
+        geocoded = None
+        if entity_type == "store" and hasattr(result, "latitude"):
+            geocoded = result.latitude is not None
+        return ProfileResponse(
+            message=f"{entity_type.capitalize()} profile updated successfully",
+            geocoded=geocoded,
+        )
         
     except HTTPException:
         raise

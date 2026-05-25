@@ -57,6 +57,7 @@ class ProfilePayload(BaseModel):
 
 class ProfileResponse(BaseModel):
     message: str
+    geocoded: Optional[bool] = None
 
 
 class FirebaseRegistrationPayload(BaseModel):

@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import select
 
 from helpers.jwt import auth_required
-from api.validators.order_validation import Order
+from api.validators.order_validation import Order, OrderHistoryItem, OrderHistoryResponse
 from engine import publisher
 from models.db import db_session
 from models.entity.phone_verification import PhoneVerification
@@ -40,6 +40,26 @@ def _serialize(obj):
     if hasattr(obj, "isoformat"):
         return obj.isoformat()
     return obj
+
+
+@order_apis.get("/history", response_model=OrderHistoryResponse)
+async def get_order_history(
+    current_user: User = Depends(_get_user_profile),
+):
+    order_service = OrderService()
+    orders = order_service.get_orders_by_user(current_user.id)
+    return OrderHistoryResponse(
+        orders=[
+            OrderHistoryItem(
+                id=o.id,
+                total_price=o.total_price,
+                status=o.status,
+                items=o.items or [],
+                order_date=o.order_date,
+            )
+            for o in orders
+        ]
+    )
 
 
 @order_apis.post("/create-order", response_model=Order)

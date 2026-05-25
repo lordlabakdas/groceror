@@ -10,3 +10,15 @@ class Order(BaseModel):
     total_price: float
     status: str
     order_date: datetime = Field(default_factory=datetime.utcnow)
+
+
+class OrderHistoryItem(BaseModel):
+    id: UUID
+    total_price: float
+    status: str
+    items: List[str]
+    order_date: datetime
+
+
+class OrderHistoryResponse(BaseModel):
+    orders: List[OrderHistoryItem]

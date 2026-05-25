@@ -47,3 +47,10 @@ class OrderService:
         return db_session.exec(
             select(OrderEntity).where(OrderEntity.id == order_id)
         ).first()
+
+    def get_orders_by_user(self, user_id: UUID) -> list[OrderEntity]:
+        return db_session.exec(
+            select(OrderEntity)
+            .where(OrderEntity.user_id == user_id)
+            .order_by(OrderEntity.order_date.desc())
+        ).all()

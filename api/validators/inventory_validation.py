@@ -51,3 +51,19 @@ class UpdateInventoryResponse(BaseModel):
 
 class DeleteInventoryResponse(BaseModel):
     status: str
+
+
+class SearchResultItem(BaseModel):
+    id: UUID
+    name: str
+    category: InventoryCategory
+    price: float
+    quantity: int
+    notes: Optional[str]
+    store_id: UUID
+    store_name: str
+
+
+class SearchResponse(BaseModel):
+    query: str
+    results: List[SearchResultItem]

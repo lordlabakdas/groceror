@@ -7,6 +7,7 @@ from sqlmodel import select
 from helpers.jwt import auth_required
 from api.validators.order_validation import (
     Order, OrderHistoryItem, OrderHistoryResponse,
+    OrderCreatedResponse,
     StoreOrderItem, StoreOrdersResponse,
     UpdateOrderStatusPayload, UpdateOrderStatusResponse,
     VALID_STATUSES,
@@ -81,7 +82,7 @@ async def get_order_history(
     )
 
 
-@order_apis.post("/create-order", response_model=Order)
+@order_apis.post("/create-order", response_model=OrderCreatedResponse)
 async def create_order(
     order: Order,
     current_user: User = Depends(_get_user_profile),
@@ -113,7 +114,7 @@ async def create_order(
             order_entity.id,
         )
 
-    return order
+    return OrderCreatedResponse(id=order_entity.id, status=order_entity.status)
 
 
 @order_apis.get("/store-orders", response_model=StoreOrdersResponse)

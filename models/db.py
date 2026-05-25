@@ -61,6 +61,7 @@ def create_db_and_tables():
     with engine.begin() as conn:
         conn.execute(text("ALTER TABLE store ADD COLUMN IF NOT EXISTS latitude FLOAT"))
         conn.execute(text("ALTER TABLE store ADD COLUMN IF NOT EXISTS longitude FLOAT"))
+        conn.execute(text('ALTER TABLE "order" ADD COLUMN IF NOT EXISTS store_id UUID REFERENCES store(id)'))
 
 
 def get_session():

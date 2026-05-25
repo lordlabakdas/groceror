@@ -11,6 +11,8 @@ from api.validators.inventory_validation import (
     AddInventoryPayload,
     AddInventoryResponse,
     DeleteInventoryResponse,
+    SearchResponse,
+    SearchResultItem,
     StoreInventory,
     StoreInventoryResponse,
     UpdateInventoryPayload,
@@ -18,8 +20,9 @@ from api.validators.inventory_validation import (
 )
 from helpers.jwt import auth_required
 from models.db import db_session
-from models.entity.inventory_entity import Inventory
+from models.entity.inventory_entity import Inventory, InventoryCategory
 from models.entity.phone_verification import PhoneVerification
+from models.entity.store_entity import Store
 from models.entity.user_entity import User
 
 logger = logging.getLogger(__name__)
@@ -89,6 +92,49 @@ async def update_inventory(
             detail="Issue updating inventory",
         )
     return {"status": "success"}
+
+
+@inventory_apis.get("/search", response_model=SearchResponse)
+async def search_inventory(
+    q: str = Query(min_length=2),
+    category: Optional[InventoryCategory] = Query(default=None),
+    user: PhoneVerification = Depends(auth_required),
+):
+    stmt = (
+        select(Inventory)
+        .where(Inventory.name.ilike(f"%{q}%"))
+        .where(Inventory.quantity > 0)
+    )
+    if category:
+        stmt = stmt.where(Inventory.category == category)
+    items = db_session.exec(stmt).all()
+
+    if not items:
+        return SearchResponse(query=q, results=[])
+
+    store_ids = list({item.store_id for item in items})
+    active_stores = db_session.exec(
+        select(Store).where(Store.id.in_(store_ids)).where(Store.is_active == True)
+    ).all()
+    store_map = {store.id: store.name for store in active_stores}
+
+    return SearchResponse(
+        query=q,
+        results=[
+            SearchResultItem(
+                id=item.id,
+                name=item.name,
+                category=item.category,
+                price=item.price,
+                quantity=item.quantity,
+                notes=item.notes,
+                store_id=item.store_id,
+                store_name=store_map[item.store_id],
+            )
+            for item in items
+            if item.store_id in store_map
+        ],
+    )
 
 
 @inventory_apis.get("/browse/{store_id}", response_model=StoreInventoryResponse)

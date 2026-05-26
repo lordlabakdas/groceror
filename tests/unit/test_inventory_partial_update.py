@@ -39,6 +39,32 @@ def test_payload_empty_is_valid():
     assert p.price is None
 
 
+def test_update_with_no_fields_is_noop():
+    """Passing neither quantity nor price updates only updated_at — no field mutation."""
+    item_id = uuid4()
+    mock_store = MagicMock()
+    mock_store.id = uuid4()
+
+    mock_item = MagicMock()
+    mock_item.quantity = 7
+    mock_item.price = 1.50
+
+    with patch("api.helpers.inventory_helper.db_session") as mock_db:
+        mock_exec_store = MagicMock()
+        mock_exec_store.first.return_value = mock_store
+        mock_exec_item = MagicMock()
+        mock_exec_item.first.return_value = mock_item
+        mock_db.exec.side_effect = [mock_exec_store, mock_exec_item]
+
+        from api.helpers.inventory_helper import InventoryHelper
+        helper = InventoryHelper(user=MagicMock())
+        helper.update_inventory_fields(item_id)  # no quantity, no price
+
+    assert mock_item.quantity == 7   # unchanged
+    assert mock_item.price == 1.50  # unchanged
+    mock_db.commit.assert_called_once()
+
+
 # ---------------------------------------------------------------------------
 # Helper tests — db_session mocked
 # ---------------------------------------------------------------------------

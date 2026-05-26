@@ -2,7 +2,7 @@ import logging
 import uuid
 from datetime import datetime
 from enum import Enum
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from sqlmodel import select
 
@@ -88,7 +88,7 @@ class InventoryHelper:
         return [inv.to_dict() for inv in results]
 
     def update_inventory_fields(
-        self, inventory_id: uuid.UUID, quantity: int = None, price: float = None
+        self, inventory_id: uuid.UUID, quantity: Optional[int] = None, price: Optional[float] = None
     ) -> None:
         store = self._require_store()
         existing = db_session.exec(

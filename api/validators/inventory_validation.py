@@ -41,8 +41,8 @@ class StoreInventoryResponse(BaseModel):
 
 
 class UpdateInventoryPayload(BaseModel):
-    quantity: int
-    price: float
+    quantity: Optional[int] = None
+    price: Optional[float] = None
 
 
 class UpdateInventoryResponse(BaseModel):

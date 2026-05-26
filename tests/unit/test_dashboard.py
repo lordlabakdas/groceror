@@ -298,3 +298,49 @@ def test_compute_top_sellers_skips_missing_inventory():
     # id1 not in inventory_map
     results = _compute_top_sellers(orders, {})
     assert results == []
+
+
+# ---------------------------------------------------------------------------
+# GET /dashboard/ - integration test via TestClient
+# ---------------------------------------------------------------------------
+
+def test_get_dashboard_returns_all_four_sections():
+    """GET /dashboard/ returns the four widget sections when authenticated as store."""
+    from unittest.mock import MagicMock, patch
+    from fastapi.testclient import TestClient
+    from main import app
+    from helpers.jwt import auth_required
+
+    mock_user = MagicMock()
+    mock_store = MagicMock()
+    mock_store.id = uuid4()
+
+    async def override_auth():
+        return mock_user
+
+    app.dependency_overrides[auth_required] = override_auth
+
+    try:
+        with patch("api.dashboard_api.InventoryHelper") as MockHelper, \
+             patch("api.dashboard_api.db_session") as mock_db:
+
+            MockHelper.return_value._require_store.return_value = mock_store
+
+            # All queries return empty results
+            mock_exec = MagicMock()
+            mock_exec.all.return_value = []
+            mock_db.exec.return_value = mock_exec
+
+            client = TestClient(app)
+            response = client.get("/dashboard/")
+
+            assert response.status_code == 200
+            data = response.json()
+            assert "low_stock" in data
+            assert "todays_summary" in data
+            assert "expiring_soon" in data
+            assert "top_sellers" in data
+            assert data["todays_summary"]["order_count"] == 0
+            assert data["todays_summary"]["revenue"] == 0.0
+    finally:
+        app.dependency_overrides.pop(auth_required, None)

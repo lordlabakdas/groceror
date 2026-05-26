@@ -108,7 +108,7 @@ class ExpiringItem(BaseModel):
     name: str
     quantity: int
     expiry_date: date
-    days_remaining: int
+    days_remaining: int = PydanticField(ge=0)
 
 
 class TopSellerItem(BaseModel):

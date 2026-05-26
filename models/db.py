@@ -9,6 +9,10 @@ from config import DBConfig
 from models.entity.phone_verification import PhoneVerification
 from models.entity.user_entity import User
 from models.entity.store_entity import Store
+from models.entity.inventory_entity import Inventory
+from models.entity.orders_entity import Order
+from models.entity.stock_threshold_entity import StockThreshold
+from models.entity.inventory_expiry_entity import InventoryExpiry
 
 engine = create_engine(
     DBConfig.DB_URL, echo=True, connect_args={"options": "-c search_path=public"}

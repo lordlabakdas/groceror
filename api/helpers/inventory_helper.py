@@ -88,7 +88,7 @@ class InventoryHelper:
         return [inv.to_dict() for inv in results]
 
     def update_inventory_fields(
-        self, inventory_id: uuid.UUID, quantity: int, price: float
+        self, inventory_id: uuid.UUID, quantity: int = None, price: float = None
     ) -> None:
         store = self._require_store()
         existing = db_session.exec(
@@ -99,8 +99,10 @@ class InventoryHelper:
         ).first()
         if not existing:
             raise ValueError("Inventory item not found")
-        existing.quantity = quantity
-        existing.price = price
+        if quantity is not None:
+            existing.quantity = quantity
+        if price is not None:
+            existing.price = price
         existing.updated_at = datetime.utcnow()
         db_session.commit()
 

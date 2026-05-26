@@ -233,3 +233,68 @@ def test_expiry_updates_existing_row():
         assert mock_existing.expiry_date == date(2026, 12, 31)
         mock_db.add.assert_not_called()
         mock_db.commit.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# _compute_top_sellers pure function
+# ---------------------------------------------------------------------------
+
+def test_compute_top_sellers_counts_correctly():
+    from api.dashboard_api import _compute_top_sellers
+
+    id1 = uuid4()
+    id2 = uuid4()
+
+    class FakeOrder:
+        def __init__(self, items):
+            self.items = items
+
+    orders = [
+        FakeOrder([str(id1), str(id1), str(id2)]),
+        FakeOrder([str(id1)]),
+    ]
+
+    class FakeItem:
+        def __init__(self, uid, name, price):
+            self.id = uid
+            self.name = name
+            self.price = price
+
+    inventory_map = {
+        id1: FakeItem(id1, "Apples", 3.00),
+        id2: FakeItem(id2, "Milk", 2.50),
+    }
+
+    results = _compute_top_sellers(orders, inventory_map)
+    assert results[0].name == "Apples"
+    assert results[0].units_sold == 3
+    assert results[0].revenue == 9.00
+    assert results[1].name == "Milk"
+    assert results[1].units_sold == 1
+
+
+def test_compute_top_sellers_skips_invalid_uuid():
+    from api.dashboard_api import _compute_top_sellers
+
+    class FakeOrder:
+        def __init__(self, items):
+            self.items = items
+
+    orders = [FakeOrder(["not-a-uuid", "also-bad"])]
+    results = _compute_top_sellers(orders, {})
+    assert results == []
+
+
+def test_compute_top_sellers_skips_missing_inventory():
+    from api.dashboard_api import _compute_top_sellers
+
+    id1 = uuid4()
+
+    class FakeOrder:
+        def __init__(self, items):
+            self.items = items
+
+    orders = [FakeOrder([str(id1)])]
+    # id1 not in inventory_map
+    results = _compute_top_sellers(orders, {})
+    assert results == []

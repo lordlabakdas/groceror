@@ -10,6 +10,7 @@ from fastapi.security import OAuth2PasswordBearer
 from loguru import logger
 
 from api.cart_api import cart_apis
+from api.dashboard_api import dashboard_apis
 from api.google_login import google_login_apis
 from api.inventory_api import inventory_apis
 from api.order_api import order_apis
@@ -72,6 +73,7 @@ app.include_router(inventory_apis)
 app.include_router(store_apis)
 app.include_router(cart_apis)
 app.include_router(order_apis)
+app.include_router(dashboard_apis)
 
 create_db_and_tables()
 

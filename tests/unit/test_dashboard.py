@@ -54,10 +54,25 @@ def test_dashboard_response_empty():
     assert r.low_stock == []
 
 
+def test_todays_order():
+    from api.validators.inventory_validation import TodaysOrder
+    from datetime import datetime
+    order = TodaysOrder(
+        id=uuid4(),
+        total_price=24.50,
+        status="pending",
+        order_date=datetime(2026, 5, 26, 10, 0),
+    )
+    assert order.total_price == 24.50
+    assert order.status == "pending"
+
+
 def test_low_stock_item():
     from api.validators.inventory_validation import LowStockItem
     item = LowStockItem(id=uuid4(), name="Milk", quantity=2, threshold=5)
-    assert item.quantity < item.threshold
+    assert item.quantity == 2
+    assert item.threshold == 5
+    assert item.name == "Milk"
 
 
 def test_expiring_item():

@@ -82,7 +82,10 @@ async def set_stock_threshold(
     user: PhoneVerification = Depends(auth_required),
 ):
     helper = InventoryHelper(user=user)
-    store = helper._require_store()
+    try:
+        store = helper._require_store()
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
     item = db_session.exec(
         select(Inventory).where(
             Inventory.id == inventory_id,
@@ -110,7 +113,10 @@ async def set_inventory_expiry(
     user: PhoneVerification = Depends(auth_required),
 ):
     helper = InventoryHelper(user=user)
-    store = helper._require_store()
+    try:
+        store = helper._require_store()
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
     item = db_session.exec(
         select(Inventory).where(
             Inventory.id == inventory_id,

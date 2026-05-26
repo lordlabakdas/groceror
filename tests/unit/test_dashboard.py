@@ -88,3 +88,125 @@ def test_top_seller_item():
     from api.validators.inventory_validation import TopSellerItem
     item = TopSellerItem(id=uuid4(), name="Apples", units_sold=42, revenue=125.58)
     assert item.revenue == 125.58
+
+
+# ---------------------------------------------------------------------------
+# Threshold endpoint logic (mock db_session)
+# ---------------------------------------------------------------------------
+
+from unittest.mock import MagicMock, patch
+
+
+def _mock_store_and_item(mock_db, store_id=None, item_id=None):
+    """Wire up db_session.exec side_effect for store-owned item lookup."""
+    store = MagicMock()
+    store.id = store_id or uuid4()
+    item = MagicMock()
+    item.id = item_id or uuid4()
+
+    exec_item = MagicMock()
+    exec_item.first.return_value = item
+    return store, item, exec_item
+
+
+def test_threshold_creates_new_row():
+    """set_stock_threshold inserts a new StockThreshold when none exists."""
+    inv_id = uuid4()
+    store = MagicMock()
+    store.id = uuid4()
+    mock_item = MagicMock()
+    mock_item.id = inv_id
+
+    with patch("api.inventory_api.db_session") as mock_db, \
+         patch("api.inventory_api.InventoryHelper") as MockHelper:
+        mock_helper = MockHelper.return_value
+        mock_helper._require_store.return_value = store
+
+        exec_item = MagicMock()
+        exec_item.first.return_value = mock_item
+        exec_threshold = MagicMock()
+        exec_threshold.first.return_value = None  # no existing threshold
+        mock_db.exec.side_effect = [exec_item, exec_threshold]
+
+        from api.validators.inventory_validation import SetThresholdPayload
+        from api.inventory_api import set_stock_threshold
+
+        import asyncio
+        payload = SetThresholdPayload(threshold=10)
+
+        async def run():
+            return await set_stock_threshold(inv_id, payload, user=MagicMock())
+
+        result = asyncio.run(run())
+        assert result == {"status": "success"}
+        mock_db.add.assert_called_once()
+        mock_db.commit.assert_called_once()
+
+
+def test_threshold_updates_existing_row():
+    """set_stock_threshold updates threshold on an existing StockThreshold row."""
+    inv_id = uuid4()
+    store = MagicMock()
+    store.id = uuid4()
+    mock_item = MagicMock()
+    mock_item.id = inv_id
+    mock_existing = MagicMock()
+    mock_existing.threshold = 5
+
+    with patch("api.inventory_api.db_session") as mock_db, \
+         patch("api.inventory_api.InventoryHelper") as MockHelper:
+        mock_helper = MockHelper.return_value
+        mock_helper._require_store.return_value = store
+
+        exec_item = MagicMock()
+        exec_item.first.return_value = mock_item
+        exec_threshold = MagicMock()
+        exec_threshold.first.return_value = mock_existing
+        mock_db.exec.side_effect = [exec_item, exec_threshold]
+
+        from api.validators.inventory_validation import SetThresholdPayload
+        from api.inventory_api import set_stock_threshold
+
+        import asyncio
+        payload = SetThresholdPayload(threshold=20)
+
+        async def run():
+            return await set_stock_threshold(inv_id, payload, user=MagicMock())
+
+        asyncio.run(run())
+        assert mock_existing.threshold == 20
+        mock_db.add.assert_not_called()
+        mock_db.commit.assert_called_once()
+
+
+def test_expiry_creates_new_row():
+    """set_inventory_expiry inserts a new InventoryExpiry when none exists."""
+    inv_id = uuid4()
+    store = MagicMock()
+    store.id = uuid4()
+    mock_item = MagicMock()
+
+    with patch("api.inventory_api.db_session") as mock_db, \
+         patch("api.inventory_api.InventoryHelper") as MockHelper:
+        mock_helper = MockHelper.return_value
+        mock_helper._require_store.return_value = store
+
+        exec_item = MagicMock()
+        exec_item.first.return_value = mock_item
+        exec_expiry = MagicMock()
+        exec_expiry.first.return_value = None
+        mock_db.exec.side_effect = [exec_item, exec_expiry]
+
+        from api.validators.inventory_validation import SetExpiryPayload
+        from api.inventory_api import set_inventory_expiry
+
+        import asyncio
+        payload = SetExpiryPayload(expiry_date=date(2026, 12, 31))
+
+        async def run():
+            return await set_inventory_expiry(inv_id, payload, user=MagicMock())
+
+        result = asyncio.run(run())
+        assert result == {"status": "success"}
+        mock_db.add.assert_called_once()
+        mock_db.commit.assert_called_once()

@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime
 from typing import List, Optional
 
 from uuid import UUID
@@ -13,6 +14,8 @@ from api.validators.inventory_validation import (
     DeleteInventoryResponse,
     SearchResponse,
     SearchResultItem,
+    SetExpiryPayload,
+    SetThresholdPayload,
     StoreInventory,
     StoreInventoryResponse,
     UpdateInventoryPayload,
@@ -21,7 +24,9 @@ from api.validators.inventory_validation import (
 from helpers.jwt import auth_required
 from models.db import db_session
 from models.entity.inventory_entity import Inventory, InventoryCategory
+from models.entity.inventory_expiry_entity import InventoryExpiry
 from models.entity.phone_verification import PhoneVerification
+from models.entity.stock_threshold_entity import StockThreshold
 from models.entity.store_entity import Store
 from models.entity.user_entity import User
 
@@ -68,6 +73,64 @@ async def get_store_inventory(
         )
     else:
         return StoreInventoryResponse(inventory=inventory)
+
+
+@inventory_apis.put("/{inventory_id}/threshold", response_model=UpdateInventoryResponse)
+async def set_stock_threshold(
+    inventory_id: UUID,
+    payload: SetThresholdPayload,
+    user: PhoneVerification = Depends(auth_required),
+):
+    helper = InventoryHelper(user=user)
+    store = helper._require_store()
+    item = db_session.exec(
+        select(Inventory).where(
+            Inventory.id == inventory_id,
+            Inventory.store_id == store.id,
+        )
+    ).first()
+    if not item:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Inventory item not found")
+    existing = db_session.exec(
+        select(StockThreshold).where(StockThreshold.inventory_id == inventory_id)
+    ).first()
+    if existing:
+        existing.threshold = payload.threshold
+        existing.updated_at = datetime.utcnow()
+    else:
+        db_session.add(StockThreshold(inventory_id=inventory_id, threshold=payload.threshold))
+    db_session.commit()
+    return {"status": "success"}
+
+
+@inventory_apis.put("/{inventory_id}/expiry", response_model=UpdateInventoryResponse)
+async def set_inventory_expiry(
+    inventory_id: UUID,
+    payload: SetExpiryPayload,
+    user: PhoneVerification = Depends(auth_required),
+):
+    helper = InventoryHelper(user=user)
+    store = helper._require_store()
+    item = db_session.exec(
+        select(Inventory).where(
+            Inventory.id == inventory_id,
+            Inventory.store_id == store.id,
+        )
+    ).first()
+    if not item:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Inventory item not found")
+    existing = db_session.exec(
+        select(InventoryExpiry)
+        .where(InventoryExpiry.inventory_id == inventory_id)
+        .order_by(InventoryExpiry.updated_at.desc())
+    ).first()
+    if existing:
+        existing.expiry_date = payload.expiry_date
+        existing.updated_at = datetime.utcnow()
+    else:
+        db_session.add(InventoryExpiry(inventory_id=inventory_id, expiry_date=payload.expiry_date))
+    db_session.commit()
+    return {"status": "success"}
 
 
 @inventory_apis.put("/{inventory_id}", response_model=UpdateInventoryResponse)

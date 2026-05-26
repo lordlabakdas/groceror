@@ -91,6 +91,7 @@ async def get_dashboard(user: PhoneVerification = Depends(auth_required)):
         select(OrderEntity).where(
             OrderEntity.store_id == store.id,
             OrderEntity.order_date >= today_utc,
+            OrderEntity.status != "cancelled",
         )
     ).all()
     revenue = round(sum(o.total_price for o in orders_today), 2)
@@ -107,7 +108,7 @@ async def get_dashboard(user: PhoneVerification = Depends(auth_required)):
     )
 
     # --- Expiring soon (next 7 days) -----------------------------------------
-    today = date.today()
+    today = datetime.utcnow().date()
     cutoff = today + timedelta(days=7)
     expiring_soon: list[ExpiringItem] = []
     if inventory_ids:
@@ -138,6 +139,7 @@ async def get_dashboard(user: PhoneVerification = Depends(auth_required)):
         select(OrderEntity).where(
             OrderEntity.store_id == store.id,
             OrderEntity.order_date >= week_start,
+            OrderEntity.status != "cancelled",
         )
     ).all()
     top_sellers = _compute_top_sellers(recent_orders, inventory_map)

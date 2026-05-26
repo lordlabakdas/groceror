@@ -1,7 +1,8 @@
+from datetime import date, datetime
 from typing import List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, validator
+from pydantic import BaseModel, Field as PydanticField, validator
 
 from models.entity.inventory_entity import InventoryCategory
 
@@ -67,3 +68,58 @@ class SearchResultItem(BaseModel):
 class SearchResponse(BaseModel):
     query: str
     results: List[SearchResultItem]
+
+
+# ---------------------------------------------------------------------------
+# Dashboard validators
+# ---------------------------------------------------------------------------
+
+
+class SetThresholdPayload(BaseModel):
+    threshold: int = PydanticField(ge=0)
+
+
+class SetExpiryPayload(BaseModel):
+    expiry_date: date
+
+
+class LowStockItem(BaseModel):
+    id: UUID
+    name: str
+    quantity: int
+    threshold: int
+
+
+class TodaysOrder(BaseModel):
+    id: UUID
+    total_price: float
+    status: str
+    order_date: datetime
+
+
+class TodaysSummary(BaseModel):
+    order_count: int
+    revenue: float
+    orders: List[TodaysOrder]
+
+
+class ExpiringItem(BaseModel):
+    id: UUID
+    name: str
+    quantity: int
+    expiry_date: date
+    days_remaining: int
+
+
+class TopSellerItem(BaseModel):
+    id: UUID
+    name: str
+    units_sold: int
+    revenue: float
+
+
+class DashboardResponse(BaseModel):
+    low_stock: List[LowStockItem]
+    todays_summary: TodaysSummary
+    expiring_soon: List[ExpiringItem]
+    top_sellers: List[TopSellerItem]

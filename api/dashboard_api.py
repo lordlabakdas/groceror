@@ -32,14 +32,16 @@ def _compute_top_sellers(
     inventory_map: dict,
     top_n: int = 5,
 ) -> list[TopSellerItem]:
-    """Count item appearances across orders and return the top N sellers."""
+    """Count units sold per item across all orders in the window and return the top N sellers."""
     counter: Counter = Counter()
     for order in orders:
         for item_id_str in (order.items or []):
             counter[item_id_str] += 1
 
     result = []
-    for item_id_str, count in counter.most_common(top_n):
+    for item_id_str, count in counter.most_common():
+        if len(result) >= top_n:
+            break
         try:
             item_uuid = UUID(item_id_str)
         except ValueError:
@@ -84,11 +86,11 @@ async def get_dashboard(user: PhoneVerification = Depends(auth_required)):
                 ))
 
     # --- Today's orders ------------------------------------------------------
-    today_start = datetime.combine(date.today(), datetime.min.time())
+    today_utc = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
     orders_today = db_session.exec(
         select(OrderEntity).where(
             OrderEntity.store_id == store.id,
-            OrderEntity.order_date >= today_start,
+            OrderEntity.order_date >= today_utc,
         )
     ).all()
     revenue = round(sum(o.total_price for o in orders_today), 2)
@@ -116,7 +118,12 @@ async def get_dashboard(user: PhoneVerification = Depends(auth_required)):
                 InventoryExpiry.expiry_date <= cutoff,
             )
         ).all()
+        # Deduplicate: keep earliest expiry per inventory item
+        seen_inventory_ids: set[UUID] = set()
         for e in sorted(expiry_rows, key=lambda r: r.expiry_date):
+            if e.inventory_id in seen_inventory_ids:
+                continue
+            seen_inventory_ids.add(e.inventory_id)
             item = inventory_map.get(e.inventory_id)
             if item:
                 expiring_soon.append(ExpiringItem(
@@ -126,7 +133,7 @@ async def get_dashboard(user: PhoneVerification = Depends(auth_required)):
                 ))
 
     # --- Top sellers (last 7 days) -------------------------------------------
-    week_start = datetime.combine(today - timedelta(days=7), datetime.min.time())
+    week_start = today_utc - timedelta(days=7)
     recent_orders = db_session.exec(
         select(OrderEntity).where(
             OrderEntity.store_id == store.id,

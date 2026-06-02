@@ -1,60 +1,66 @@
-import json
+# models/service/orders_service.py
 import logging
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from sqlmodel import select
 
 from api.validators.order_validation import CreateOrderRequest
 from models.db import db_session
 from models.entity.inventory_entity import Inventory
+from models.entity.order_item_entity import OrderItem
 from models.entity.orders_entity import Order as OrderEntity
 
 logger = logging.getLogger(__name__)
 
 
-class UUIDEncoder(json.JSONEncoder):
-    def default(self, obj):
-        if isinstance(obj, UUID):
-            return str(obj)
-        return super().default(obj)
-
-
 class OrderService:
-    def __init__(self):
-        pass
-
     def create_order(self, order: CreateOrderRequest, current_user) -> OrderEntity:
-        """Persist the order and return the saved entity (with its DB-assigned id)."""
+        inv_ids = [item.inventory_id for item in order.items]
+        inventory_rows = db_session.exec(
+            select(Inventory).where(Inventory.id.in_(inv_ids))
+        ).all()
+        inventory_map = {inv.id: inv for inv in inventory_rows}
+
+        missing = [str(iid) for iid in inv_ids if iid not in inventory_map]
+        if missing:
+            raise ValueError(f"Inventory items not found: {", ".join(missing)}")
+
+        store_ids = {inventory_map[iid].store_id for iid in inv_ids}
+        if len(store_ids) != 1:
+            raise ValueError("All order items must belong to the same store")
+        store_id = store_ids.pop()
+
+        total_price = round(
+            sum(item.quantity * inventory_map[item.inventory_id].price for item in order.items), 2
+        )
+
         try:
-            store_id = None
-            # Extract inventory IDs from the OrderLineItem objects
-            item_ids = [item.inventory_id for item in order.items] if order.items else []
-
-            if item_ids:
-                first_item = db_session.exec(
-                    select(Inventory).where(Inventory.id == item_ids[0])
-                ).first()
-                if first_item:
-                    store_id = first_item.store_id
-
+            order_id = uuid4()
             order_entity = OrderEntity(
+                id=order_id,
                 order_date=order.order_date,
                 user_id=current_user.id,
                 store_id=store_id,
-                items=json.loads(json.dumps(item_ids, cls=UUIDEncoder))
-                if item_ids
-                else [],
-                total_price=0.0,  # Will be computed server-side
-                status="pending",  # Always start with pending status
+                total_price=total_price,
+                status="pending",
             )
             db_session.add(order_entity)
+
+            for item in order.items:
+                db_session.add(OrderItem(
+                    order_id=order_id,
+                    inventory_id=item.inventory_id,
+                    quantity=item.quantity,
+                    price=inventory_map[item.inventory_id].price,
+                ))
+
             db_session.commit()
             db_session.refresh(order_entity)
             return order_entity
         except Exception as e:
-            logger.error(f"Error creating order: {e}")
+            logger.error("Error creating order: %s", e)
             db_session.rollback()
-            raise e
+            raise
 
     def get_order_by_id(self, order_id: UUID) -> OrderEntity:
         return db_session.exec(

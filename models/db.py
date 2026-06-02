@@ -66,6 +66,11 @@ def create_db_and_tables():
         conn.execute(text("ALTER TABLE store ADD COLUMN IF NOT EXISTS latitude FLOAT"))
         conn.execute(text("ALTER TABLE store ADD COLUMN IF NOT EXISTS longitude FLOAT"))
         conn.execute(text('ALTER TABLE "order" ADD COLUMN IF NOT EXISTS store_id UUID REFERENCES store(id)'))
+        # Indexes added after initial schema creation
+        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_inventory_store_id ON inventory (store_id)"))
+        conn.execute(text('CREATE INDEX IF NOT EXISTS ix_order_user_id ON "order" (user_id)'))
+        conn.execute(text('CREATE INDEX IF NOT EXISTS ix_order_store_id ON "order" (store_id)'))
+        conn.execute(text('CREATE INDEX IF NOT EXISTS ix_order_status ON "order" (status)'))
 
 
 def get_session():

@@ -396,11 +396,7 @@ class TestOrders:
     def test_create_order(self, mock_publish, user_token, user_profile, inventory_id):
         r = client.post(
             "/order/create-order",
-            json={
-                "items": [inventory_id],
-                "total_price": 5.97,
-                "status": "pending",
-            },
+            json={"items": [{"inventory_id": inventory_id, "quantity": 2}]},
             headers=_headers(user_token),
         )
         assert r.status_code == 200
@@ -410,23 +406,22 @@ class TestOrders:
         mock_publish.assert_called_once()
 
     @patch("engine.publisher.publish_message")
-    def test_create_order_empty_items(self, mock_publish, user_token, user_profile):
+    def test_create_order_empty_items_rejected(self, mock_publish, user_token, user_profile):
         r = client.post(
             "/order/create-order",
-            json={"items": [], "total_price": 0.0, "status": "pending"},
+            json={"items": []},
             headers=_headers(user_token),
         )
-        assert r.status_code == 200
+        assert r.status_code == 422
 
     def test_create_order_requires_auth(self):
         r = client.post(
             "/order/create-order",
-            json={"items": [], "total_price": 0.0, "status": "pending"},
+            json={"items": [{"inventory_id": "00000000-0000-0000-0000-000000000000", "quantity": 1}]},
         )
         assert r.status_code == 401
 
     def test_create_order_requires_profile(self, store_token):
-        """A user account with no profile cannot place orders."""
         phone = f"+1555{_suffix}98"
         _otp_and_verify(phone)
         _register(phone, "user")
@@ -434,7 +429,7 @@ class TestOrders:
         with patch("engine.publisher.publish_message"):
             r = client.post(
                 "/order/create-order",
-                json={"items": [], "total_price": 0.0, "status": "pending"},
+                json={"items": [{"inventory_id": "00000000-0000-0000-0000-000000000000", "quantity": 1}]},
                 headers=_headers(token),
             )
         assert r.status_code == 400

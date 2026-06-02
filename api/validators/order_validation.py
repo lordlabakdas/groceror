@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import List
 from uuid import UUID
 
-from pydantic import BaseModel, Field, conlist
+from pydantic import BaseModel, Field
 
 VALID_STATUSES = {"pending", "confirmed", "ready", "delivered", "cancelled"}
 
@@ -14,7 +14,7 @@ class OrderLineItem(BaseModel):
 
 
 class CreateOrderRequest(BaseModel):
-    items: conlist(OrderLineItem, min_items=1)
+    items: List[OrderLineItem] = Field(..., min_items=1)
     order_date: datetime = Field(default_factory=datetime.utcnow)
 
 

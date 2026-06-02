@@ -272,6 +272,7 @@ def test_compute_top_sellers_counts_correctly():
     assert results[0].revenue == 9.00
     assert results[1].name == "Milk"
     assert results[1].units_sold == 1
+    assert results[1].revenue == 2.50
 
 
 def test_compute_top_sellers_skips_missing_inventory():

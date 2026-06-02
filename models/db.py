@@ -113,6 +113,7 @@ def create_db_and_tables():
                 LEFT JOIN inventory inv ON inv.id = t.item_str::uuid
                 WHERE o.items IS NOT NULL
                   AND array_length(o.items, 1) > 0
+                  AND inv.id IS NOT NULL
                   AND NOT EXISTS (
                       SELECT 1 FROM orderitem oi WHERE oi.order_id = o.id
                   )

@@ -23,7 +23,8 @@ class OrderService:
 
         missing = [str(iid) for iid in inv_ids if iid not in inventory_map]
         if missing:
-            raise ValueError(f"Inventory items not found: {", ".join(missing)}")
+            missing_str = ", ".join(str(i) for i in missing)
+            raise ValueError(f"Inventory items not found: {missing_str}")
 
         store_ids = {inventory_map[iid].store_id for iid in inv_ids}
         if len(store_ids) != 1:

@@ -4,7 +4,7 @@ from uuid import UUID
 
 from sqlmodel import select
 
-from api.validators.order_validation import Order
+from api.validators.order_validation import CreateOrderRequest
 from models.db import db_session
 from models.entity.inventory_entity import Inventory
 from models.entity.orders_entity import Order as OrderEntity
@@ -23,13 +23,16 @@ class OrderService:
     def __init__(self):
         pass
 
-    def create_order(self, order: Order, current_user) -> OrderEntity:
+    def create_order(self, order: CreateOrderRequest, current_user) -> OrderEntity:
         """Persist the order and return the saved entity (with its DB-assigned id)."""
         try:
             store_id = None
-            if order.items:
+            # Extract inventory IDs from the OrderLineItem objects
+            item_ids = [item.inventory_id for item in order.items] if order.items else []
+
+            if item_ids:
                 first_item = db_session.exec(
-                    select(Inventory).where(Inventory.id == order.items[0])
+                    select(Inventory).where(Inventory.id == item_ids[0])
                 ).first()
                 if first_item:
                     store_id = first_item.store_id
@@ -38,11 +41,11 @@ class OrderService:
                 order_date=order.order_date,
                 user_id=current_user.id,
                 store_id=store_id,
-                items=json.loads(json.dumps(order.items, cls=UUIDEncoder))
-                if order.items
+                items=json.loads(json.dumps(item_ids, cls=UUIDEncoder))
+                if item_ids
                 else [],
-                total_price=order.total_price,
-                status=order.status,
+                total_price=0.0,  # Will be computed server-side
+                status="pending",  # Always start with pending status
             )
             db_session.add(order_entity)
             db_session.commit()

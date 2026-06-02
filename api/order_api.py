@@ -6,7 +6,7 @@ from sqlmodel import select
 
 from helpers.jwt import auth_required
 from api.validators.order_validation import (
-    Order, OrderHistoryItem, OrderHistoryResponse,
+    CreateOrderRequest, OrderHistoryItem, OrderHistoryResponse,
     OrderCreatedResponse,
     StoreOrderItem, StoreOrdersResponse,
     UpdateOrderStatusPayload, UpdateOrderStatusResponse,
@@ -84,7 +84,7 @@ async def get_order_history(
 
 @order_apis.post("/create-order", response_model=OrderCreatedResponse)
 async def create_order(
-    order: Order,
+    order: CreateOrderRequest,
     current_user: User = Depends(_get_user_profile),
 ):
     logger.info(f"Creating order for user {current_user.id}")

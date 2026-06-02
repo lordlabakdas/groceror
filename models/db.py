@@ -13,6 +13,7 @@ from models.entity.inventory_entity import Inventory
 from models.entity.orders_entity import Order
 from models.entity.stock_threshold_entity import StockThreshold
 from models.entity.inventory_expiry_entity import InventoryExpiry
+from models.entity.order_item_entity import OrderItem  # noqa: F401
 
 engine = create_engine(
     DBConfig.DB_URL, echo=True, connect_args={"options": "-c search_path=public"}
@@ -71,6 +72,52 @@ def create_db_and_tables():
         conn.execute(text('CREATE INDEX IF NOT EXISTS ix_order_user_id ON "order" (user_id)'))
         conn.execute(text('CREATE INDEX IF NOT EXISTS ix_order_store_id ON "order" (store_id)'))
         conn.execute(text('CREATE INDEX IF NOT EXISTS ix_order_status ON "order" (status)'))
+
+        # OrderItem table + indexes (idempotent)
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS orderitem (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                order_id UUID NOT NULL REFERENCES "order"(id),
+                inventory_id UUID NOT NULL REFERENCES inventory(id),
+                quantity INTEGER NOT NULL DEFAULT 1,
+                price FLOAT NOT NULL DEFAULT 0.0,
+                created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+                updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+            )
+        """))
+        conn.execute(text(
+            "CREATE INDEX IF NOT EXISTS ix_orderitem_order_id ON orderitem (order_id)"
+        ))
+        conn.execute(text(
+            "CREATE INDEX IF NOT EXISTS ix_orderitem_inventory_id ON orderitem (inventory_id)"
+        ))
+
+        # Migrate existing Order.items ARRAY → orderitem rows (runs only while items column exists)
+        items_col = conn.execute(text(
+            "SELECT column_name FROM information_schema.columns "
+            "WHERE table_name = 'order' AND column_name = 'items'"
+        )).fetchone()
+        if items_col:
+            conn.execute(text("""
+                INSERT INTO orderitem (id, order_id, inventory_id, quantity, price, created_at, updated_at)
+                SELECT
+                    gen_random_uuid(),
+                    o.id,
+                    t.item_str::uuid,
+                    1,
+                    COALESCE(inv.price, 0.0),
+                    NOW(),
+                    NOW()
+                FROM "order" o,
+                LATERAL unnest(o.items) AS t(item_str)
+                LEFT JOIN inventory inv ON inv.id = t.item_str::uuid
+                WHERE o.items IS NOT NULL
+                  AND array_length(o.items, 1) > 0
+                  AND NOT EXISTS (
+                      SELECT 1 FROM orderitem oi WHERE oi.order_id = o.id
+                  )
+            """))
+            conn.execute(text('ALTER TABLE "order" DROP COLUMN IF EXISTS items'))
 
 
 def get_session():

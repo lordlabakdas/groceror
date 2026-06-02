@@ -18,3 +18,4 @@ def test_order_item_defaults():
     assert oi.quantity == 1
     assert oi.id is not None
     assert oi.created_at is not None
+    assert oi.updated_at is not None

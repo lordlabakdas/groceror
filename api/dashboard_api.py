@@ -19,6 +19,7 @@ from helpers.jwt import auth_required
 from models.db import db_session
 from models.entity.inventory_entity import Inventory
 from models.entity.inventory_expiry_entity import InventoryExpiry
+from models.entity.order_item_entity import OrderItem
 from models.entity.orders_entity import Order as OrderEntity
 from models.entity.phone_verification import PhoneVerification
 from models.entity.stock_threshold_entity import StockThreshold
@@ -28,31 +29,25 @@ dashboard_apis = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
 
 def _compute_top_sellers(
-    orders: list,
+    order_items: list,
     inventory_map: dict,
     top_n: int = 5,
 ) -> list[TopSellerItem]:
-    """Count units sold per item across all orders in the window and return the top N sellers."""
     counter: Counter = Counter()
-    for order in orders:
-        for item_id_str in (order.items or []):
-            counter[item_id_str] += 1
+    for oi in order_items:
+        counter[oi.inventory_id] += oi.quantity
 
     result = []
-    for item_id_str, count in counter.most_common():
+    for inv_id, units_sold in counter.most_common():
         if len(result) >= top_n:
             break
-        try:
-            item_uuid = UUID(item_id_str)
-        except ValueError:
-            continue
-        item = inventory_map.get(item_uuid)
+        item = inventory_map.get(inv_id)
         if item:
             result.append(TopSellerItem(
                 id=item.id,
                 name=item.name,
-                units_sold=count,
-                revenue=round(count * item.price, 2),
+                units_sold=units_sold,
+                revenue=round(units_sold * item.price, 2),
             ))
     return result
 
@@ -135,14 +130,16 @@ async def get_dashboard(user: PhoneVerification = Depends(auth_required)):
 
     # --- Top sellers (last 7 days) -------------------------------------------
     week_start = today_utc - timedelta(days=7)
-    recent_orders = db_session.exec(
-        select(OrderEntity).where(
+    recent_order_items = db_session.exec(
+        select(OrderItem)
+        .join(OrderEntity, OrderItem.order_id == OrderEntity.id)
+        .where(
             OrderEntity.store_id == store.id,
             OrderEntity.order_date >= week_start,
             OrderEntity.status != "cancelled",
         )
     ).all()
-    top_sellers = _compute_top_sellers(recent_orders, inventory_map)
+    top_sellers = _compute_top_sellers(recent_order_items, inventory_map)
 
     return DashboardResponse(
         low_stock=low_stock,

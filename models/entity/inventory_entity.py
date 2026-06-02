@@ -21,7 +21,7 @@ class Inventory(SQLModel, table=True):
     quantity: int = Field(default=0)
     category: InventoryCategory
     user_id: Optional[UUID] = Field(default=None, foreign_key="user.id", nullable=True)
-    store_id: UUID = Field(foreign_key="store.id")
+    store_id: UUID = Field(foreign_key="store.id", index=True)
     price: float = Field(default=0.0)
     notes: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)

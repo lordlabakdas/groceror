@@ -1,16 +1,20 @@
+# api/validators/order_validation.py
 from datetime import datetime
-from pydantic import BaseModel, Field
+from typing import List
+from uuid import UUID
 
-from typing import List, Optional
-from uuid import UUID, uuid4
+from pydantic import BaseModel, Field, conlist
 
 VALID_STATUSES = {"pending", "confirmed", "ready", "delivered", "cancelled"}
 
 
-class Order(BaseModel):
-    items: List[UUID]
-    total_price: float
-    status: str
+class OrderLineItem(BaseModel):
+    inventory_id: UUID
+    quantity: int = 1
+
+
+class CreateOrderRequest(BaseModel):
+    items: conlist(OrderLineItem, min_items=1)
     order_date: datetime = Field(default_factory=datetime.utcnow)
 
 
@@ -19,11 +23,18 @@ class OrderCreatedResponse(BaseModel):
     status: str
 
 
+class OrderHistoryLineItem(BaseModel):
+    inventory_id: UUID
+    name: str
+    quantity: int
+    price: float
+
+
 class OrderHistoryItem(BaseModel):
     id: UUID
     total_price: float
     status: str
-    items: List[str]
+    items: List[OrderHistoryLineItem]
     order_date: datetime
 
 
@@ -31,11 +42,18 @@ class OrderHistoryResponse(BaseModel):
     orders: List[OrderHistoryItem]
 
 
+class StoreOrderLineItem(BaseModel):
+    inventory_id: UUID
+    name: str
+    quantity: int
+    price: float
+
+
 class StoreOrderItem(BaseModel):
     id: UUID
     total_price: float
     status: str
-    item_names: List[str]
+    items: List[StoreOrderLineItem]
     order_date: datetime
 
 

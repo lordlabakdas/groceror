@@ -14,3 +14,4 @@ class OrderItem(SQLModel, table=True):
     quantity: int = Field(default=1)
     price: float = Field(default=0.0)
     created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)

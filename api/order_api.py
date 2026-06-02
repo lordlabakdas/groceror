@@ -1,20 +1,29 @@
+# api/order_api.py
 import logging
 import uuid
+from collections import defaultdict
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import select
 
 from helpers.jwt import auth_required
 from api.validators.order_validation import (
-    CreateOrderRequest, OrderHistoryItem, OrderHistoryResponse,
+    CreateOrderRequest,
     OrderCreatedResponse,
-    StoreOrderItem, StoreOrdersResponse,
-    UpdateOrderStatusPayload, UpdateOrderStatusResponse,
+    OrderHistoryItem,
+    OrderHistoryLineItem,
+    OrderHistoryResponse,
+    StoreOrderItem,
+    StoreOrderLineItem,
+    StoreOrdersResponse,
+    UpdateOrderStatusPayload,
+    UpdateOrderStatusResponse,
     VALID_STATUSES,
 )
 from engine import publisher
 from models.db import db_session
 from models.entity.inventory_entity import Inventory
+from models.entity.order_item_entity import OrderItem
 from models.entity.phone_verification import PhoneVerification
 from models.entity.store_entity import Store
 from models.entity.user_entity import User
@@ -37,10 +46,7 @@ def _get_store_profile(entity: PhoneVerification = Depends(auth_required)) -> St
 
 
 def _get_user_profile(entity: PhoneVerification = Depends(auth_required)) -> User:
-    """Resolve the User profile for the authenticated entity."""
-    user = db_session.exec(
-        select(User).where(User.entity_id == entity.id)
-    ).first()
+    user = db_session.exec(select(User).where(User.entity_id == entity.id)).first()
     if not user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -63,18 +69,37 @@ def _serialize(obj):
 
 
 @order_apis.get("/history", response_model=OrderHistoryResponse)
-async def get_order_history(
-    current_user: User = Depends(_get_user_profile),
-):
-    order_service = OrderService()
-    orders = order_service.get_orders_by_user(current_user.id)
+async def get_order_history(current_user: User = Depends(_get_user_profile)):
+    orders = OrderService().get_orders_by_user(current_user.id)
+
+    if not orders:
+        return OrderHistoryResponse(orders=[])
+
+    order_ids = [o.id for o in orders]
+    rows = db_session.exec(
+        select(OrderItem, Inventory)
+        .join(Inventory, OrderItem.inventory_id == Inventory.id)
+        .where(OrderItem.order_id.in_(order_ids))
+    ).all()
+
+    items_by_order: dict = defaultdict(list)
+    for oi, inv in rows:
+        items_by_order[oi.order_id].append(
+            OrderHistoryLineItem(
+                inventory_id=oi.inventory_id,
+                name=inv.name,
+                quantity=oi.quantity,
+                price=oi.price,
+            )
+        )
+
     return OrderHistoryResponse(
         orders=[
             OrderHistoryItem(
                 id=o.id,
                 total_price=o.total_price,
                 status=o.status,
-                items=o.items or [],
+                items=items_by_order[o.id],
                 order_date=o.order_date,
             )
             for o in orders
@@ -87,15 +112,15 @@ async def create_order(
     order: CreateOrderRequest,
     current_user: User = Depends(_get_user_profile),
 ):
-    logger.info(f"Creating order for user {current_user.id}")
+    logger.info("Creating order for user %s", current_user.id)
+    try:
+        order_entity = OrderService().create_order(order, current_user)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
-    order_service = OrderService()
-    order_entity = order_service.create_order(order, current_user)
-
-    # Build the message payload using the DB-assigned id as order_id.
     order_dict = _serialize(order.dict())
-    order_dict["order_id"]  = str(order_entity.id)
-    order_dict["user_id"]   = str(current_user.id)
+    order_dict["order_id"] = str(order_entity.id)
+    order_dict["user_id"] = str(current_user.id)
     order_dict["order_date"] = order.order_date.isoformat()
 
     try:
@@ -106,30 +131,35 @@ async def create_order(
             **order_dict,
         )
     except Exception:
-        # Order is already persisted in PostgreSQL; a publish failure is
-        # logged by the publisher.  We warn here so it appears in request
-        # logs but do not fail the HTTP response.
-        logger.warning(
-            "order_id=%s was saved but could not be published to RabbitMQ",
-            order_entity.id,
-        )
+        logger.warning("order_id=%s was saved but could not be published", order_entity.id)
 
     return OrderCreatedResponse(id=order_entity.id, status=order_entity.status)
 
 
 @order_apis.get("/store-orders", response_model=StoreOrdersResponse)
 async def get_store_orders(current_store: Store = Depends(_get_store_profile)):
-    order_service = OrderService()
-    orders = order_service.get_orders_by_store(current_store.id)
+    orders = OrderService().get_orders_by_store(current_store.id)
 
-    # Collect all unique inventory IDs across all orders to batch-resolve names.
-    all_item_ids = {item_id for o in orders for item_id in (o.items or [])}
-    inventory_map: dict[str, str] = {}
-    if all_item_ids:
-        rows = db_session.exec(
-            select(Inventory).where(Inventory.id.in_(all_item_ids))
-        ).all()
-        inventory_map = {str(row.id): row.name for row in rows}
+    if not orders:
+        return StoreOrdersResponse(orders=[])
+
+    order_ids = [o.id for o in orders]
+    rows = db_session.exec(
+        select(OrderItem, Inventory)
+        .join(Inventory, OrderItem.inventory_id == Inventory.id)
+        .where(OrderItem.order_id.in_(order_ids))
+    ).all()
+
+    items_by_order: dict = defaultdict(list)
+    for oi, inv in rows:
+        items_by_order[oi.order_id].append(
+            StoreOrderLineItem(
+                inventory_id=oi.inventory_id,
+                name=inv.name,
+                quantity=oi.quantity,
+                price=oi.price,
+            )
+        )
 
     return StoreOrdersResponse(
         orders=[
@@ -137,7 +167,7 @@ async def get_store_orders(current_store: Store = Depends(_get_store_profile)):
                 id=o.id,
                 total_price=o.total_price,
                 status=o.status,
-                item_names=[inventory_map.get(item_id, item_id) for item_id in (o.items or [])],
+                items=items_by_order[o.id],
                 order_date=o.order_date,
             )
             for o in orders
@@ -156,8 +186,7 @@ async def update_order_status(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Invalid status. Must be one of: {', '.join(sorted(VALID_STATUSES))}",
         )
-    order_service = OrderService()
-    updated = order_service.update_order_status(order_id, current_store.id, payload.status)
+    updated = OrderService().update_order_status(order_id, current_store.id, payload.status)
     if not updated:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
     try:

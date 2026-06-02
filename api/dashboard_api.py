@@ -33,6 +33,7 @@ def _compute_top_sellers(
     inventory_map: dict,
     top_n: int = 5,
 ) -> list[TopSellerItem]:
+    """Return top N sellers by units sold across the given order items."""
     counter: Counter = Counter()
     for oi in order_items:
         counter[oi.inventory_id] += oi.quantity

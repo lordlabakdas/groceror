@@ -57,7 +57,7 @@ class CartService:
                 )
 
             cart = self.get_active_cart(store_id)
-            cart_item = CartItemEntity(cart_id=cart.id, **item_data.dict())
+            cart_item = CartItemEntity(cart_id=cart.id, **item_data.model_dump())
             db_session.add(cart_item)
 
             cart.total_quantity += cart_item.quantity
@@ -108,7 +108,7 @@ class CartService:
                     item_data.quantity - cart_item.quantity
                 )
 
-            for key, value in item_data.dict(exclude_unset=True).items():
+            for key, value in item_data.model_dump(exclude_unset=True).items():
                 setattr(cart_item, key, value)
             cart_item.updated_at = datetime.utcnow()
             cart.updated_at = datetime.utcnow()

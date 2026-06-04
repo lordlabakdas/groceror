@@ -14,7 +14,7 @@ class OrderLineItem(BaseModel):
 
 
 class CreateOrderRequest(BaseModel):
-    items: List[OrderLineItem] = Field(..., min_items=1)
+    items: List[OrderLineItem] = Field(..., min_length=1)
     order_date: datetime = Field(default_factory=datetime.utcnow)
 
 

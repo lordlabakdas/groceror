@@ -112,7 +112,7 @@ async def register(registration_payload: RegistrationPayload):
             )
         
         # Register the user (this will also verify phone number)
-        new_user = auth_helper.register(register_payload=registration_payload.dict())
+        new_user = auth_helper.register(register_payload=registration_payload.model_dump())
         
     except HTTPException:
         raise
@@ -220,7 +220,7 @@ async def send_otp_legacy(phone: str):
 
 @user_apis.post("/login", response_model=LoginResponse)
 async def login(login_payload: LoginPayload):
-    logger.info(f"Logging in user with payload: {login_payload.dict()}")
+    logger.info(f"Logging in user with payload: {login_payload.model_dump()}")
 
     user = auth_helper.get_user_by_phone(phone=login_payload.phone)
     if not user or not auth_helper.verify_password(

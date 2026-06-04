@@ -1,37 +1,44 @@
 from dataclasses import dataclass
-from typing import ClassVar
+from typing import ClassVar, Dict, Any
 
 import yaml
-from pydantic import BaseModel
 
 
-class LogConfig(BaseModel):
+@dataclass
+class LogConfig:
     """Logging configuration to be set for the server"""
 
     LOGGER_NAME: str = "groceror"
     LOG_FORMAT: str = "%(levelprefix)s | %(asctime)s | %(message)s"
     LOG_LEVEL: str = "DEBUG"
 
-    # Logging config
-    version = 1
-    disable_existing_loggers = False
-    formatters = {
-        "default": {
-            "()": "uvicorn.logging.DefaultFormatter",
-            "fmt": LOG_FORMAT,
-            "datefmt": "%Y-%m-%d %H:%M:%S",
-        },
-    }
-    handlers = {
-        "default": {
-            "formatter": "default",
-            "class": "logging.StreamHandler",
-            "stream": "ext://sys.stderr",
-        },
-    }
-    loggers = {
-        LOGGER_NAME: {"handlers": ["default"], "level": LOG_LEVEL},
-    }
+    version: int = 1
+    disable_existing_loggers: bool = False
+    formatters: Dict[str, Any] = None
+    handlers: Dict[str, Any] = None
+    loggers: Dict[str, Any] = None
+
+    def __post_init__(self):
+        if self.formatters is None:
+            self.formatters = {
+                "default": {
+                    "()": "uvicorn.logging.DefaultFormatter",
+                    "fmt": self.LOG_FORMAT,
+                    "datefmt": "%Y-%m-%d %H:%M:%S",
+                },
+            }
+        if self.handlers is None:
+            self.handlers = {
+                "default": {
+                    "formatter": "default",
+                    "class": "logging.StreamHandler",
+                    "stream": "ext://sys.stderr",
+                },
+            }
+        if self.loggers is None:
+            self.loggers = {
+                self.LOGGER_NAME: {"handlers": ["default"], "level": self.LOG_LEVEL},
+            }
 
 
 CONFIG = yaml.safe_load(open(".config.yml"))

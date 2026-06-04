@@ -8,7 +8,7 @@ PORT   = 8000
 
 .DEFAULT_GOAL := help
 
-.PHONY: help setup run test test-unit test-integration lint format clean
+.PHONY: help setup run test test-unit test-integration lint format clean migrate-generate migrate-up migrate-down migrate-history migrate-current
 
 help: ## Show available targets
 	@awk 'BEGIN {FS = ":.*##"; printf "Usage:\n  make \033[36m<target>\033[0m\n\nTargets:\n"} \
@@ -42,6 +42,21 @@ format: ## Auto-fix code style (ruff + black + isort) — modifies files
 	$(RUFF) check --fix .
 	$(BLACK) .
 	$(ISORT) .
+
+migrate-generate: ## Generate a migration: make migrate-generate MSG="describe change"
+	venv/bin/alembic revision --autogenerate -m "$(MSG)"
+
+migrate-up:       ## Apply all pending migrations
+	venv/bin/alembic upgrade head
+
+migrate-down:     ## Rollback the last migration
+	venv/bin/alembic downgrade -1
+
+migrate-history:  ## Show full migration history
+	venv/bin/alembic history --verbose
+
+migrate-current:  ## Show current applied revision
+	venv/bin/alembic current
 
 clean: ## Remove __pycache__, .pytest_cache, .ruff_cache, and *.pyc files
 	find . -type d -name __pycache__ -not -path "./.git/*" -exec rm -rf {} +

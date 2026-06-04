@@ -25,7 +25,7 @@ from config import RabbitMQConfig
 
 logger = logging.getLogger(__name__)
 
-SCHEMA_VERSION = "1.0"
+SCHEMA_VERSION = "2.0"
 DLX_EXCHANGE   = "dlx"
 DLQ_NAME       = "order_queue.dlq"
 USER_EVENTS_QUEUE = "user_events_queue"

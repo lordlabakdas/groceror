@@ -122,6 +122,8 @@ async def create_order(
     order_dict["order_id"] = str(order_entity.id)
     order_dict["user_id"] = str(current_user.id)
     order_dict["order_date"] = order.order_date.isoformat()
+    order_dict["total_price"] = order_entity.total_price
+    order_dict["status"] = order_entity.status
 
     try:
         publisher.publish_message(

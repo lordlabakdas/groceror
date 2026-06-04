@@ -50,7 +50,7 @@ if not database_exists(_db.engine.url):
 # SQLite doesn't support ARRAY types. For testing, we patch the ARRAY imports
 # to use String instead.
 try:
-    SQLModel.metadata.create_all(bind=_db.engine)
+    SQLModel.metadata.create_all(_db.engine)
 except Exception as e:
     # If ARRAY type fails in SQLite, skip table creation for now
     # (tests that need DB fixtures should use separate test fixtures)

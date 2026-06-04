@@ -60,7 +60,7 @@ def create_db_and_tables():
     with engine.begin() as conn:
         conn.execute(text("CREATE SCHEMA IF NOT EXISTS public"))
 
-    SQLModel.metadata.create_all(bind=engine)
+    SQLModel.metadata.create_all(engine)
 
     # Idempotent column additions for fields added after initial table creation.
     with engine.begin() as conn:

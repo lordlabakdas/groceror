@@ -1,18 +1,16 @@
 import threading
 
-from sqlalchemy import text
-from sqlalchemy_utils import create_database, database_exists
-from sqlmodel import SQLModel, Session, create_engine
+from sqlmodel import Session, create_engine
 
 from config import DBConfig
 # Import all SQLModel models so metadata is populated
-from models.entity.phone_verification import PhoneVerification
-from models.entity.user_entity import User
-from models.entity.store_entity import Store
-from models.entity.inventory_entity import Inventory
-from models.entity.orders_entity import Order
-from models.entity.stock_threshold_entity import StockThreshold
-from models.entity.inventory_expiry_entity import InventoryExpiry
+from models.entity.phone_verification import PhoneVerification  # noqa: F401
+from models.entity.user_entity import User  # noqa: F401
+from models.entity.store_entity import Store  # noqa: F401
+from models.entity.inventory_entity import Inventory  # noqa: F401
+from models.entity.orders_entity import Order  # noqa: F401
+from models.entity.stock_threshold_entity import StockThreshold  # noqa: F401
+from models.entity.inventory_expiry_entity import InventoryExpiry  # noqa: F401
 from models.entity.order_item_entity import OrderItem  # noqa: F401
 
 engine = create_engine(
@@ -51,74 +49,6 @@ class _ThreadLocalSessionProxy:
 
 
 db_session = _ThreadLocalSessionProxy()
-
-
-def create_db_and_tables():
-    if not database_exists(engine.url):
-        create_database(engine.url)
-
-    with engine.begin() as conn:
-        conn.execute(text("CREATE SCHEMA IF NOT EXISTS public"))
-
-    SQLModel.metadata.create_all(engine)
-
-    # Idempotent column additions for fields added after initial table creation.
-    with engine.begin() as conn:
-        conn.execute(text("ALTER TABLE store ADD COLUMN IF NOT EXISTS latitude FLOAT"))
-        conn.execute(text("ALTER TABLE store ADD COLUMN IF NOT EXISTS longitude FLOAT"))
-        conn.execute(text('ALTER TABLE "order" ADD COLUMN IF NOT EXISTS store_id UUID REFERENCES store(id)'))
-        # Indexes added after initial schema creation
-        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_inventory_store_id ON inventory (store_id)"))
-        conn.execute(text('CREATE INDEX IF NOT EXISTS ix_order_user_id ON "order" (user_id)'))
-        conn.execute(text('CREATE INDEX IF NOT EXISTS ix_order_store_id ON "order" (store_id)'))
-        conn.execute(text('CREATE INDEX IF NOT EXISTS ix_order_status ON "order" (status)'))
-
-        # OrderItem table + indexes (idempotent)
-        conn.execute(text("""
-            CREATE TABLE IF NOT EXISTS orderitem (
-                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                order_id UUID NOT NULL REFERENCES "order"(id),
-                inventory_id UUID NOT NULL REFERENCES inventory(id),
-                quantity INTEGER NOT NULL DEFAULT 1,
-                price FLOAT NOT NULL DEFAULT 0.0,
-                created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-                updated_at TIMESTAMP NOT NULL DEFAULT NOW()
-            )
-        """))
-        conn.execute(text(
-            "CREATE INDEX IF NOT EXISTS ix_orderitem_order_id ON orderitem (order_id)"
-        ))
-        conn.execute(text(
-            "CREATE INDEX IF NOT EXISTS ix_orderitem_inventory_id ON orderitem (inventory_id)"
-        ))
-
-        # Migrate existing Order.items ARRAY → orderitem rows (runs only while items column exists)
-        items_col = conn.execute(text(
-            "SELECT column_name FROM information_schema.columns "
-            "WHERE table_name = 'order' AND column_name = 'items'"
-        )).fetchone()
-        if items_col:
-            conn.execute(text("""
-                INSERT INTO orderitem (id, order_id, inventory_id, quantity, price, created_at, updated_at)
-                SELECT
-                    gen_random_uuid(),
-                    o.id,
-                    t.item_str::uuid,
-                    1,
-                    COALESCE(inv.price, 0.0),
-                    NOW(),
-                    NOW()
-                FROM "order" o,
-                LATERAL unnest(o.items) AS t(item_str)
-                LEFT JOIN inventory inv ON inv.id = t.item_str::uuid
-                WHERE o.items IS NOT NULL
-                  AND array_length(o.items, 1) > 0
-                  AND inv.id IS NOT NULL
-                  AND NOT EXISTS (
-                      SELECT 1 FROM orderitem oi WHERE oi.order_id = o.id
-                  )
-            """))
-            conn.execute(text('ALTER TABLE "order" DROP COLUMN IF EXISTS items'))
 
 
 def get_session():

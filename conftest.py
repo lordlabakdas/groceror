@@ -4,8 +4,7 @@ Root-level pytest configuration.
 This conftest is imported by pytest *before* any sub-directory conftest
 files are processed.  The SQLite patch runs at module-import time (not
 inside a hook) so that ``models.db.engine`` is already replaced when
-``tests/conftest.py`` imports ``tests._client`` -> ``main`` ->
-``create_db_and_tables``.
+``tests/conftest.py`` imports ``tests._client`` -> ``main``.
 """
 import threading
 
@@ -59,11 +58,3 @@ except Exception as e:
     else:
         raise
 
-
-# Replace create_db_and_tables with a no-op so ``main.py`` line 76 does
-# not try to run the PostgreSQL-only ``CREATE SCHEMA`` statement.
-def _noop_create_db_and_tables():
-    pass
-
-
-_db.create_db_and_tables = _noop_create_db_and_tables  # type: ignore[assignment]

@@ -109,3 +109,53 @@ EmailClient().send(
 ```
 
 See the [groceror-email README](https://github.com/lordlabakdas/groceror-email) for setup and running instructions.
+
+-----
+
+## Database Migrations
+
+Schema changes are managed with [Alembic](https://alembic.sqlalchemy.org/). Never edit the database schema by hand — every change goes through a migration file.
+
+### First-time setup (fresh database)
+
+```bash
+make migrate-up
+```
+
+This creates all tables and leaves the database at the latest revision.
+
+### Everyday workflow
+
+**Check where your database is:**
+```bash
+make migrate-current
+```
+
+**Apply any pending migrations after pulling new code:**
+```bash
+make migrate-up
+```
+
+**Add a new migration after changing a model:**
+```bash
+make migrate-generate MSG="add expiry_notes to inventory"
+# Review the generated file in alembic/versions/, then:
+make migrate-up
+```
+
+**Roll back the last migration:**
+```bash
+make migrate-down
+```
+
+**Browse the full history:**
+```bash
+make migrate-history
+```
+
+### Rules
+
+- Always review the auto-generated migration before applying it — Alembic is accurate but not infallible (e.g. it cannot detect column renames).
+- Commit the migration file in the same PR as the model change.
+- Never edit an already-applied migration. Write a new one instead.
+- The app no longer auto-migrates on startup. Run `make migrate-up` before starting the server on a schema change.

@@ -42,7 +42,7 @@ async def add_inventory(
     try:
         inventory_helper_obj = InventoryHelper(user=user)
         new_inventory_id = inventory_helper_obj.add_inventory(
-            **add_inventory_payload.dict()
+            **add_inventory_payload.model_dump()
         )
     except Exception as e:
         logger.exception(f"Error while adding inventory with exception details {e}")

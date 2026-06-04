@@ -2,7 +2,7 @@ from datetime import date, datetime
 from typing import List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field as PydanticField, validator
+from pydantic import BaseModel, Field as PydanticField, field_validator
 
 from models.entity.inventory_entity import InventoryCategory
 
@@ -14,7 +14,7 @@ class AddInventoryPayload(BaseModel):
     price: float = 0.0
     notes: Optional[str] = None
 
-    @validator("category")
+    @field_validator("category", mode="before")
     def check_category(cls, v):
         if not isinstance(v, InventoryCategory):
             raise ValueError(

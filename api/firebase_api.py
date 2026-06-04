@@ -20,9 +20,9 @@ firebase_apis = APIRouter()
 
 @firebase_apis.post("/register", response_model=FirebaseRegistrationResponse)
 async def firebase_register(login_payload: FirebaseRegistrationPayload):
-    logger.info(f"Logging in user with payload: {login_payload.dict()}")
+    logger.info(f"Logging in user with payload: {login_payload.model_dump()}")
     try:
-        auth_user = firebase_auth.create_user(**login_payload.dict())
+        auth_user = firebase_auth.create_user(**login_payload.model_dump())
     except firebase_auth.EmailAlreadyExistsError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials"
@@ -33,7 +33,7 @@ async def firebase_register(login_payload: FirebaseRegistrationPayload):
 
 @firebase_apis.post("/login", response_model=FirebaseLoginResponse)
 async def firebase_login(login_payload: FirebaseLoginPayload):
-    logger.info(f"Logging in user with payload: {login_payload.dict()}")
+    logger.info(f"Logging in user with payload: {login_payload.model_dump()}")
     try:
         user = firebase_auth.get_user_by_email(login_payload.email)
         if user:

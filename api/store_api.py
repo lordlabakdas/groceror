@@ -39,7 +39,7 @@ async def create_store(
     current_user: PhoneVerification = Depends(auth_required),
 ):
     store_service = StoreService()
-    return store_service.create_store(entity_id=current_user.id, **store_data.dict())
+    return store_service.create_store(entity_id=current_user.id, **store_data.model_dump())
 
 
 @store_apis.get("/")
@@ -82,7 +82,7 @@ async def update_store(
 ):
     store_service = StoreService()
     _assert_owner(store_service.get_store(store_id), current_user)
-    return store_service.update_store(store_id, **store_data.dict(exclude_unset=True))
+    return store_service.update_store(store_id, **store_data.model_dump(exclude_unset=True))
 
 
 @store_apis.delete("/{store_id}")

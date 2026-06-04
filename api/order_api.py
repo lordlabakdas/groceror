@@ -118,7 +118,7 @@ async def create_order(
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
-    order_dict = _serialize(order.dict())
+    order_dict = _serialize(order.model_dump())
     order_dict["order_id"] = str(order_entity.id)
     order_dict["user_id"] = str(current_user.id)
     order_dict["order_date"] = order.order_date.isoformat()

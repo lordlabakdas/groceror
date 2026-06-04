@@ -16,7 +16,7 @@ from api.inventory_api import inventory_apis
 from api.order_api import order_apis
 from api.store_api import store_apis
 from api.user_api import user_apis
-from models.db import create_db_and_tables, db_session
+from models.db import db_session
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -75,7 +75,6 @@ app.include_router(cart_apis)
 app.include_router(order_apis)
 app.include_router(dashboard_apis)
 
-create_db_and_tables()
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 

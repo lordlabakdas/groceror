@@ -168,13 +168,6 @@ async def set_profile(
     logger.info(f"Setting profile for user type: {current_user.entity_type}")
     
     try:
-        # Validate required fields based on entity type
-        if current_user.entity_type == "store" and not profile_payload.website:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Website is required for store profiles"
-            )
-        
         # Set profile based on entity type
         result = auth_helper.set_profile(entity=current_user, profile_payload=profile_payload)
         try:

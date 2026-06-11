@@ -103,14 +103,13 @@ class TestAuth:
         )
         assert r.status_code == 200
 
-    def test_set_store_profile_requires_website(self, store_token):
+    def test_set_store_profile_without_website(self, store_token):
         r = client.post(
             "/user/set-profile",
             json={"name": "No Website Store", "email": "nosite@groceror.test"},
             headers=_headers(store_token),
         )
-        assert r.status_code == 400
-        assert "Website is required" in r.json()["detail"]
+        assert r.status_code == 200
 
     def test_refresh_token(self, user_token):
         r = client.get("/user/refresh-token", headers=_headers(user_token))

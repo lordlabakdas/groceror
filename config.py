@@ -65,6 +65,16 @@ class JWTConfig(object):
 
 
 @dataclass
+class TwilioConfig(object):
+    """Twilio SMS configuration"""
+
+    _twilio = CONFIG.get("groceror").get("twilio", {})
+    ACCOUNT_SID = _twilio.get("account_sid", "")
+    AUTH_TOKEN  = _twilio.get("auth_token", "")
+    FROM_NUMBER = _twilio.get("from_number", "")
+
+
+@dataclass
 class RabbitMQConfig(object):
     """RabbitMQ connection configuration"""
 

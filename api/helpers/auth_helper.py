@@ -225,10 +225,22 @@ def send_otp(phone: str) -> str:
 
     db_session.commit()
 
-    # In production, send via SNS: send_sms_via_sns(phone, f"Your OTP is: {otp}")
-    print(f"OTP for {phone}: {otp}")
-
+    send_sms(phone, f"Your Groceror OTP is: {otp}. Valid for 10 minutes.")
     return otp
+
+
+def send_sms(phone: str, message: str) -> None:
+    """Send SMS via Twilio. Falls back to stdout if credentials are not configured."""
+    from config import TwilioConfig
+    if not TwilioConfig.ACCOUNT_SID or not TwilioConfig.AUTH_TOKEN:
+        print(f"[SMS fallback] OTP for {phone}: {message}")
+        return
+    from twilio.rest import Client
+    Client(TwilioConfig.ACCOUNT_SID, TwilioConfig.AUTH_TOKEN).messages.create(
+        body=message,
+        from_=TwilioConfig.FROM_NUMBER,
+        to=phone,
+    )
 
 
 def verify_otp(phone: str, otp: str) -> bool:

@@ -1,7 +1,26 @@
+import os
 from dataclasses import dataclass
-from typing import ClassVar, Dict, Any
+from pathlib import Path
+from typing import Any, ClassVar, Dict
 
 import yaml
+
+# Load .config.yml if present (local dev). On Render (and other cloud envs)
+# the file won't exist — config comes from environment variables instead.
+_cfg_path = Path(".config.yml")
+_file: dict = yaml.safe_load(_cfg_path.read_text()) if _cfg_path.exists() else {}
+
+
+def _cfg(*keys: str, env: str = None, default: str = "") -> str:
+    """Return config value: env var > .config.yml > default."""
+    if env and os.environ.get(env):
+        return os.environ[env]
+    val: Any = _file
+    for k in keys:
+        val = (val or {}).get(k)
+        if val is None:
+            return default
+    return val or default
 
 
 @dataclass
@@ -41,46 +60,62 @@ class LogConfig:
             }
 
 
-CONFIG = yaml.safe_load(open(".config.yml"))
-
-
 @dataclass
 class DBConfig(object):
-    """Database configuration to be set for the server"""
+    """Database configuration — prefers DATABASE_URL env var (Render/Supabase),
+    falls back to individual fields from .config.yml for local dev."""
 
-    DB_USER = CONFIG.get("groceror").get("db").get("DB_USER")
-    DB_PASSWORD = CONFIG.get("groceror").get("db").get("DB_PASSWORD")
-    DB_HOST = CONFIG.get("groceror").get("db").get("DB_HOST")
-    DB_PORT = CONFIG.get("groceror").get("db").get("DB_PORT")
-    DB_NAME = CONFIG.get("groceror").get("db").get("DB_NAME")
-    DB_URL = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+    DB_URL: ClassVar[str] = os.environ.get("DATABASE_URL") or (
+        "postgresql://"
+        f"{_cfg('groceror', 'db', 'DB_USER')}:{_cfg('groceror', 'db', 'DB_PASSWORD')}"
+        f"@{_cfg('groceror', 'db', 'DB_HOST')}:{_cfg('groceror', 'db', 'DB_PORT')}"
+        f"/{_cfg('groceror', 'db', 'DB_NAME')}"
+    )
 
 
 @dataclass
 class JWTConfig(object):
     """JWT related configuration"""
 
-    JWT_ALGORITHM = CONFIG.get("groceror").get("jwt").get("JWT_ALGORITHM")
-    JWT_SECRET_KEY = CONFIG.get("groceror").get("jwt").get("JWT_SECRET_KEY")
+    JWT_ALGORITHM: ClassVar[str] = _cfg(
+        "groceror", "jwt", "JWT_ALGORITHM", env="JWT_ALGORITHM", default="HS256"
+    )
+    JWT_SECRET_KEY: ClassVar[str] = _cfg(
+        "groceror", "jwt", "JWT_SECRET_KEY", env="JWT_SECRET_KEY"
+    )
 
 
 @dataclass
 class TwilioConfig(object):
     """Twilio SMS configuration"""
 
-    _twilio = CONFIG.get("groceror").get("twilio", {})
-    ACCOUNT_SID = _twilio.get("account_sid", "")
-    AUTH_TOKEN  = _twilio.get("auth_token", "")
-    FROM_NUMBER = _twilio.get("from_number", "")
+    ACCOUNT_SID: ClassVar[str] = _cfg(
+        "groceror", "twilio", "account_sid", env="TWILIO_ACCOUNT_SID"
+    )
+    AUTH_TOKEN: ClassVar[str] = _cfg(
+        "groceror", "twilio", "auth_token", env="TWILIO_AUTH_TOKEN"
+    )
+    FROM_NUMBER: ClassVar[str] = _cfg(
+        "groceror", "twilio", "from_number", env="TWILIO_FROM_NUMBER"
+    )
 
 
 @dataclass
 class RabbitMQConfig(object):
     """RabbitMQ connection configuration"""
 
-    _rmq = CONFIG.get("groceror").get("rabbitmq", {})
-    HOST     = _rmq.get("host", "localhost")
-    PORT     = int(_rmq.get("port", 5672))
-    USER     = _rmq.get("user", "guest")
-    PASSWORD = _rmq.get("password", "guest")
-    VHOST    = _rmq.get("virtual_host", "/")
+    HOST: ClassVar[str] = _cfg(
+        "groceror", "rabbitmq", "host", env="RABBITMQ_HOST", default="localhost"
+    )
+    PORT: ClassVar[int] = int(
+        _cfg("groceror", "rabbitmq", "port", env="RABBITMQ_PORT", default="5672")
+    )
+    USER: ClassVar[str] = _cfg(
+        "groceror", "rabbitmq", "user", env="RABBITMQ_USER", default="guest"
+    )
+    PASSWORD: ClassVar[str] = _cfg(
+        "groceror", "rabbitmq", "password", env="RABBITMQ_PASSWORD", default="guest"
+    )
+    VHOST: ClassVar[str] = _cfg(
+        "groceror", "rabbitmq", "virtual_host", env="RABBITMQ_VHOST", default="/"
+    )

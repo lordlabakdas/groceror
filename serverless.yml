@@ -1,0 +1,305 @@
+service: groceror-infra
+frameworkVersion: "3"
+
+provider:
+  name: aws
+  region: ${opt:region, 'us-east-1'}
+  stage: ${opt:stage, 'prod'}
+
+# No Lambda functions — this stack is pure CloudFormation infrastructure.
+
+resources:
+  Resources:
+
+    # ── SQS Dead-Letter Queues ───────────────────────────────────────────────
+
+    UserEventsDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: user_events_queue_dlq
+        MessageRetentionPeriod: 1209600  # 14 days
+
+    EmailDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: email_queue_dlq
+        MessageRetentionPeriod: 1209600
+
+    OrderDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: order_queue_dlq
+        MessageRetentionPeriod: 1209600
+
+    # ── SQS Main Queues ──────────────────────────────────────────────────────
+
+    UserEventsQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: user_events_queue
+        VisibilityTimeout: 60
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt UserEventsDLQ.Arn
+          maxReceiveCount: 3
+
+    EmailQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: email_queue
+        VisibilityTimeout: 60
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt EmailDLQ.Arn
+          maxReceiveCount: 3
+
+    OrderQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: order_queue
+        VisibilityTimeout: 60
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt OrderDLQ.Arn
+          maxReceiveCount: 3
+
+    # ── ECR Repository ───────────────────────────────────────────────────────
+
+    GrocerECR:
+      Type: AWS::ECR::Repository
+      Properties:
+        RepositoryName: groceror-api
+
+    # ── CloudWatch Log Group ─────────────────────────────────────────────────
+
+    GrocerLogGroup:
+      Type: AWS::Logs::LogGroup
+      Properties:
+        LogGroupName: /ecs/groceror-api
+        RetentionInDays: 14
+
+    # ── IAM: EC2 instance role (lets the EC2 host register with ECS) ─────────
+
+    EC2InstanceRole:
+      Type: AWS::IAM::Role
+      Properties:
+        RoleName: groceror-ec2-role-${self:provider.stage}
+        AssumeRolePolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service: ec2.amazonaws.com
+              Action: sts:AssumeRole
+        ManagedPolicyArns:
+          - arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role
+          - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+
+    EC2InstanceProfile:
+      Type: AWS::IAM::InstanceProfile
+      Properties:
+        InstanceProfileName: groceror-ec2-profile-${self:provider.stage}
+        Roles:
+          - !Ref EC2InstanceRole
+
+    # ── IAM: ECS task execution role (pull image from ECR, write logs) ───────
+
+    ECSExecutionRole:
+      Type: AWS::IAM::Role
+      Properties:
+        RoleName: groceror-ecs-execution-role-${self:provider.stage}
+        AssumeRolePolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service: ecs-tasks.amazonaws.com
+              Action: sts:AssumeRole
+        ManagedPolicyArns:
+          - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+
+    # ── IAM: ECS task role (publish to SQS from inside the container) ────────
+
+    ECSTaskRole:
+      Type: AWS::IAM::Role
+      Properties:
+        RoleName: groceror-ecs-task-role-${self:provider.stage}
+        AssumeRolePolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service: ecs-tasks.amazonaws.com
+              Action: sts:AssumeRole
+        Policies:
+          - PolicyName: SQSPublish
+            PolicyDocument:
+              Version: "2012-10-17"
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - sqs:SendMessage
+                    - sqs:GetQueueUrl
+                  Resource:
+                    - !GetAtt UserEventsQueue.Arn
+                    - !GetAtt EmailQueue.Arn
+                    - !GetAtt OrderQueue.Arn
+
+    # ── Security Group ───────────────────────────────────────────────────────
+
+    AppSecurityGroup:
+      Type: AWS::EC2::SecurityGroup
+      Properties:
+        GroupDescription: groceror API inbound rules
+        SecurityGroupIngress:
+          - IpProtocol: tcp
+            FromPort: 8000
+            ToPort: 8000
+            CidrIp: 0.0.0.0/0
+          - IpProtocol: tcp
+            FromPort: 443
+            ToPort: 443
+            CidrIp: 0.0.0.0/0
+          - IpProtocol: tcp
+            FromPort: 22
+            ToPort: 22
+            CidrIp: 0.0.0.0/0
+
+    # ── ECS Cluster ──────────────────────────────────────────────────────────
+
+    GrocerCluster:
+      Type: AWS::ECS::Cluster
+      Properties:
+        ClusterName: groceror-cluster-${self:provider.stage}
+
+    # ── EC2 Instance (t2.micro — free tier, runs ECS agent) ──────────────────
+    # The SSM parameter resolves to the latest ECS-optimised Amazon Linux 2 AMI
+    # for the current region at deploy time, avoiding hard-coded AMI IDs.
+
+    GrocerInstance:
+      Type: AWS::EC2::Instance
+      DependsOn: GrocerCluster
+      Properties:
+        InstanceType: t2.micro
+        ImageId: "{{resolve:ssm:/aws/service/ecs/optimized-ami/amazon-linux-2/recommended/image_id}}"
+        IamInstanceProfile: !Ref EC2InstanceProfile
+        SecurityGroups:
+          - !Ref AppSecurityGroup
+        UserData:
+          Fn::Base64:
+            !Sub |
+              #!/bin/bash
+              echo ECS_CLUSTER=groceror-cluster-${self:provider.stage} >> /etc/ecs/ecs.config
+              echo ECS_ENABLE_TASK_IAM_ROLE=true >> /etc/ecs/ecs.config
+
+    # ── Elastic IP (stable public address for the EC2 host) ──────────────────
+
+    GrocerEIP:
+      Type: AWS::EC2::EIP
+      Properties:
+        Domain: vpc
+
+    EIPAssociation:
+      Type: AWS::EC2::EIPAssociation
+      DependsOn: GrocerInstance
+      Properties:
+        InstanceId: !Ref GrocerInstance
+        EIP: !Ref GrocerEIP
+
+    # ── ECS Task Definition ──────────────────────────────────────────────────
+    # Sensitive values (DATABASE_URL, JWT_SECRET_KEY, Twilio) must be stored in
+    # SSM Parameter Store under /groceror/<stage>/<KEY> before deploying.
+    # Run: aws ssm put-parameter --name /groceror/prod/DATABASE_URL --value "..." --type SecureString
+
+    GrocerTaskDef:
+      Type: AWS::ECS::TaskDefinition
+      Properties:
+        Family: groceror-api-${self:provider.stage}
+        NetworkMode: bridge
+        TaskRoleArn: !GetAtt ECSTaskRole.Arn
+        ExecutionRoleArn: !GetAtt ECSExecutionRole.Arn
+        ContainerDefinitions:
+          - Name: groceror-api
+            Image: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/groceror-api:latest"
+            PortMappings:
+              - ContainerPort: 8000
+                HostPort: 8000
+                Protocol: tcp
+            Essential: true
+            Environment:
+              - Name: USER_EVENTS_QUEUE_URL
+                Value: !Ref UserEventsQueue
+              - Name: EMAIL_QUEUE_URL
+                Value: !Ref EmailQueue
+              - Name: ORDER_QUEUE_URL
+                Value: !Ref OrderQueue
+              - Name: AWS_REGION
+                Value: !Ref AWS::Region
+            Secrets:
+              - Name: DATABASE_URL
+                ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/groceror/${self:provider.stage}/DATABASE_URL"
+              - Name: JWT_SECRET_KEY
+                ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/groceror/${self:provider.stage}/JWT_SECRET_KEY"
+              - Name: TWILIO_ACCOUNT_SID
+                ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/groceror/${self:provider.stage}/TWILIO_ACCOUNT_SID"
+              - Name: TWILIO_AUTH_TOKEN
+                ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/groceror/${self:provider.stage}/TWILIO_AUTH_TOKEN"
+              - Name: TWILIO_FROM_NUMBER
+                ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/groceror/${self:provider.stage}/TWILIO_FROM_NUMBER"
+            LogConfiguration:
+              LogDriver: awslogs
+              Options:
+                awslogs-group: /ecs/groceror-api
+                awslogs-region: !Ref AWS::Region
+                awslogs-stream-prefix: groceror
+
+    # ── ECS Service (keeps one task running, restarts on crash) ─────────────
+
+    GrocerService:
+      Type: AWS::ECS::Service
+      DependsOn:
+        - GrocerInstance
+        - EIPAssociation
+      Properties:
+        ServiceName: groceror-api-${self:provider.stage}
+        Cluster: !Ref GrocerCluster
+        TaskDefinition: !Ref GrocerTaskDef
+        DesiredCount: 1
+        LaunchType: EC2
+
+  # ── CloudFormation Exports (consumed by companion service stacks) ──────────
+
+  Outputs:
+
+    UserEventsQueueArn:
+      Value: !GetAtt UserEventsQueue.Arn
+      Export:
+        Name: groceror-infra-${self:provider.stage}-UserEventsQueueArn
+
+    UserEventsQueueUrl:
+      Value: !Ref UserEventsQueue
+      Export:
+        Name: groceror-infra-${self:provider.stage}-UserEventsQueueUrl
+
+    EmailQueueArn:
+      Value: !GetAtt EmailQueue.Arn
+      Export:
+        Name: groceror-infra-${self:provider.stage}-EmailQueueArn
+
+    EmailQueueUrl:
+      Value: !Ref EmailQueue
+      Export:
+        Name: groceror-infra-${self:provider.stage}-EmailQueueUrl
+
+    OrderQueueArn:
+      Value: !GetAtt OrderQueue.Arn
+      Export:
+        Name: groceror-infra-${self:provider.stage}-OrderQueueArn
+
+    OrderQueueUrl:
+      Value: !Ref OrderQueue
+      Export:
+        Name: groceror-infra-${self:provider.stage}-OrderQueueUrl
+
+    GrocerPublicIP:
+      Value: !Ref GrocerEIP
+      Description: Stable public IP of the groceror API server
+      Export:
+        Name: groceror-infra-${self:provider.stage}-PublicIP

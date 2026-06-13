@@ -264,6 +264,85 @@ resources:
         DesiredCount: 1
         LaunchType: EC2
 
+    # ── Cost guardrails ───────────────────────────────────────────────────────
+    # Requires billing alerts to be enabled in the AWS Console first:
+    #   Billing Dashboard → Preferences → "Receive Billing Alerts"
+
+    # SNS topic so the budget can fan out to email
+    BillingAlertTopic:
+      Type: AWS::SNS::Topic
+      Properties:
+        TopicName: groceror-billing-alerts-${self:provider.stage}
+        Subscription:
+          - Protocol: email
+            Endpoint: ${env:ALERT_EMAIL, 'siddharth.gangadhar@gmail.com'}
+
+    # CloudWatch alarm fires when estimated charges exceed $8 in a calendar month.
+    # Billing metrics are published to us-east-1 regardless of the stack region.
+    BillingAlarm:
+      Type: AWS::CloudWatch::Alarm
+      Properties:
+        AlarmName: groceror-monthly-charges-${self:provider.stage}
+        AlarmDescription: "Groceror monthly AWS charges exceeded $8 — consider running teardown_aws.sh"
+        Namespace: AWS/Billing
+        MetricName: EstimatedCharges
+        Dimensions:
+          - Name: Currency
+            Value: USD
+        Statistic: Maximum
+        Period: 86400      # checked daily
+        EvaluationPeriods: 1
+        Threshold: 8
+        ComparisonOperator: GreaterThanThreshold
+        TreatMissingData: notBreaching
+        AlarmActions:
+          - !Ref BillingAlertTopic
+
+    # AWS Budget: hard monthly limit of $10 with alerts at 50 %, 80 %, and 100 %
+    GrocerMonthlyBudget:
+      Type: AWS::Budgets::Budget
+      Properties:
+        Budget:
+          BudgetName: groceror-monthly-${self:provider.stage}
+          BudgetType: COST
+          TimeUnit: MONTHLY
+          BudgetLimit:
+            Amount: 10
+            Unit: USD
+        NotificationsWithSubscribers:
+          - Notification:
+              NotificationType: ACTUAL
+              ComparisonOperator: GREATER_THAN
+              Threshold: 50        # $5 — first warning
+              ThresholdType: PERCENTAGE
+            Subscribers:
+              - SubscriptionType: EMAIL
+                Address: ${env:ALERT_EMAIL, 'siddharth.gangadhar@gmail.com'}
+          - Notification:
+              NotificationType: ACTUAL
+              ComparisonOperator: GREATER_THAN
+              Threshold: 80        # $8 — serious warning
+              ThresholdType: PERCENTAGE
+            Subscribers:
+              - SubscriptionType: EMAIL
+                Address: ${env:ALERT_EMAIL, 'siddharth.gangadhar@gmail.com'}
+          - Notification:
+              NotificationType: ACTUAL
+              ComparisonOperator: GREATER_THAN
+              Threshold: 100       # $10 — run teardown immediately
+              ThresholdType: PERCENTAGE
+            Subscribers:
+              - SubscriptionType: EMAIL
+                Address: ${env:ALERT_EMAIL, 'siddharth.gangadhar@gmail.com'}
+          - Notification:
+              NotificationType: FORECASTED
+              ComparisonOperator: GREATER_THAN
+              Threshold: 100       # forecasted to exceed $10
+              ThresholdType: PERCENTAGE
+            Subscribers:
+              - SubscriptionType: EMAIL
+                Address: ${env:ALERT_EMAIL, 'siddharth.gangadhar@gmail.com'}
+
   # ── CloudFormation Exports (consumed by companion service stacks) ──────────
 
   Outputs:

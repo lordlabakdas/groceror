@@ -75,29 +75,50 @@ resources:
         LogGroupName: /ecs/groceror-api
         RetentionInDays: 14
 
-    # ── IAM: EC2 instance role (lets the EC2 host register with ECS) ─────────
+    # ── VPC + public networking ──────────────────────────────────────────────
+    # Fargate tasks run in awsvpc mode and need a VPC with internet access.
 
-    EC2InstanceRole:
-      Type: AWS::IAM::Role
+    GrocerVPC:
+      Type: AWS::EC2::VPC
       Properties:
-        RoleName: groceror-ec2-role-${self:provider.stage}
-        AssumeRolePolicyDocument:
-          Version: "2012-10-17"
-          Statement:
-            - Effect: Allow
-              Principal:
-                Service: ec2.amazonaws.com
-              Action: sts:AssumeRole
-        ManagedPolicyArns:
-          - arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role
-          - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+        CidrBlock: 10.0.0.0/16
+        EnableDnsSupport: true
+        EnableDnsHostnames: true
 
-    EC2InstanceProfile:
-      Type: AWS::IAM::InstanceProfile
+    GrocerIGW:
+      Type: AWS::EC2::InternetGateway
+
+    GrocerVPCGatewayAttachment:
+      Type: AWS::EC2::VPCGatewayAttachment
       Properties:
-        InstanceProfileName: groceror-ec2-profile-${self:provider.stage}
-        Roles:
-          - !Ref EC2InstanceRole
+        VpcId: !Ref GrocerVPC
+        InternetGatewayId: !Ref GrocerIGW
+
+    GrocerPublicSubnet:
+      Type: AWS::EC2::Subnet
+      Properties:
+        VpcId: !Ref GrocerVPC
+        CidrBlock: 10.0.1.0/24
+        AvailabilityZone: !Select [0, !GetAZs '']
+
+    GrocerRouteTable:
+      Type: AWS::EC2::RouteTable
+      Properties:
+        VpcId: !Ref GrocerVPC
+
+    GrocerPublicRoute:
+      Type: AWS::EC2::Route
+      DependsOn: GrocerVPCGatewayAttachment
+      Properties:
+        RouteTableId: !Ref GrocerRouteTable
+        DestinationCidrBlock: 0.0.0.0/0
+        GatewayId: !Ref GrocerIGW
+
+    GrocerSubnetRTAssociation:
+      Type: AWS::EC2::SubnetRouteTableAssociation
+      Properties:
+        SubnetId: !Ref GrocerPublicSubnet
+        RouteTableId: !Ref GrocerRouteTable
 
     # ── IAM: ECS task execution role (pull image from ECR, write logs) ───────
 
@@ -148,6 +169,7 @@ resources:
       Type: AWS::EC2::SecurityGroup
       Properties:
         GroupDescription: groceror API inbound rules
+        VpcId: !Ref GrocerVPC
         SecurityGroupIngress:
           - IpProtocol: tcp
             FromPort: 8000
@@ -157,10 +179,6 @@ resources:
             FromPort: 443
             ToPort: 443
             CidrIp: 0.0.0.0/0
-          - IpProtocol: tcp
-            FromPort: 22
-            ToPort: 22
-            CidrIp: 0.0.0.0/0
 
     # ── ECS Cluster ──────────────────────────────────────────────────────────
 
@@ -168,40 +186,6 @@ resources:
       Type: AWS::ECS::Cluster
       Properties:
         ClusterName: groceror-cluster-${self:provider.stage}
-
-    # ── EC2 Instance (t2.micro — free tier, runs ECS agent) ──────────────────
-    # The SSM parameter resolves to the latest ECS-optimised Amazon Linux 2 AMI
-    # for the current region at deploy time, avoiding hard-coded AMI IDs.
-
-    GrocerInstance:
-      Type: AWS::EC2::Instance
-      DependsOn: GrocerCluster
-      Properties:
-        InstanceType: t2.micro
-        ImageId: "{{resolve:ssm:/aws/service/ecs/optimized-ami/amazon-linux-2/recommended/image_id}}"
-        IamInstanceProfile: !Ref EC2InstanceProfile
-        SecurityGroups:
-          - !Ref AppSecurityGroup
-        UserData:
-          Fn::Base64:
-            !Sub |
-              #!/bin/bash
-              echo ECS_CLUSTER=groceror-cluster-${self:provider.stage} >> /etc/ecs/ecs.config
-              echo ECS_ENABLE_TASK_IAM_ROLE=true >> /etc/ecs/ecs.config
-
-    # ── Elastic IP (stable public address for the EC2 host) ──────────────────
-
-    GrocerEIP:
-      Type: AWS::EC2::EIP
-      Properties:
-        Domain: vpc
-
-    EIPAssociation:
-      Type: AWS::EC2::EIPAssociation
-      DependsOn: GrocerInstance
-      Properties:
-        InstanceId: !Ref GrocerInstance
-        EIP: !Ref GrocerEIP
 
     # ── ECS Task Definition ──────────────────────────────────────────────────
     # Sensitive values (DATABASE_URL, JWT_SECRET_KEY, Twilio) must be stored in
@@ -212,7 +196,11 @@ resources:
       Type: AWS::ECS::TaskDefinition
       Properties:
         Family: groceror-api-${self:provider.stage}
-        NetworkMode: bridge
+        NetworkMode: awsvpc           # required for Fargate
+        RequiresCompatibilities:
+          - FARGATE
+        Cpu: "256"                    # 0.25 vCPU (~$0.012/hr)
+        Memory: "512"                 # 512 MB  (~$0.001/hr)
         TaskRoleArn: !GetAtt ECSTaskRole.Arn
         ExecutionRoleArn: !GetAtt ECSExecutionRole.Arn
         ContainerDefinitions:
@@ -220,7 +208,6 @@ resources:
             Image: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/groceror-api:latest"
             PortMappings:
               - ContainerPort: 8000
-                HostPort: 8000
                 Protocol: tcp
             Essential: true
             Environment:
@@ -250,19 +237,24 @@ resources:
                 awslogs-region: !Ref AWS::Region
                 awslogs-stream-prefix: groceror
 
-    # ── ECS Service (keeps one task running, restarts on crash) ─────────────
+    # ── ECS Service (keeps one Fargate task running, restarts on crash) ────────
 
     GrocerService:
       Type: AWS::ECS::Service
-      DependsOn:
-        - GrocerInstance
-        - EIPAssociation
+      DependsOn: GrocerPublicRoute    # ensure internet routing is ready
       Properties:
         ServiceName: groceror-api-${self:provider.stage}
         Cluster: !Ref GrocerCluster
         TaskDefinition: !Ref GrocerTaskDef
         DesiredCount: 1
-        LaunchType: EC2
+        LaunchType: FARGATE
+        NetworkConfiguration:
+          AwsvpcConfiguration:
+            AssignPublicIp: ENABLED   # task gets a public IP directly on its ENI
+            Subnets:
+              - !Ref GrocerPublicSubnet
+            SecurityGroups:
+              - !Ref AppSecurityGroup
 
     # ── Cost guardrails ───────────────────────────────────────────────────────
     # Requires billing alerts to be enabled in the AWS Console first:
@@ -377,8 +369,13 @@ resources:
       Export:
         Name: groceror-infra-${self:provider.stage}-OrderQueueUrl
 
-    GrocerPublicIP:
-      Value: !Ref GrocerEIP
-      Description: Stable public IP of the groceror API server
+    ECSClusterName:
+      Value: !Ref GrocerCluster
+      Description: ECS cluster name (use with aws ecs list-tasks to find the Fargate task IP)
       Export:
-        Name: groceror-infra-${self:provider.stage}-PublicIP
+        Name: groceror-infra-${self:provider.stage}-ECSClusterName
+
+    ECSServiceName:
+      Value: !GetAtt GrocerService.Name
+      Export:
+        Name: groceror-infra-${self:provider.stage}-ECSServiceName

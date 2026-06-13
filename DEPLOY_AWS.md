@@ -3,7 +3,7 @@
 ## Architecture
 
 ```
-Internet → EC2 t2.micro (ECS agent)
+Internet → ECS Fargate task (0.25 vCPU / 512 MB)
                └── groceror-api container (FastAPI)
                        ├── publishes → SQS user_events_queue → Lambda (groceror-users)
                        ├── publishes → SQS email_queue        → Lambda (groceror-email)
@@ -14,18 +14,17 @@ All sensitive config lives in **SSM Parameter Store** — nothing is committed t
 
 ---
 
-## Cost expectations (free tier)
+## Cost expectations
 
-| Resource | Free tier | Cost if exceeded |
+| Resource | Free tier | Ongoing cost |
 |---|---|---|
-| EC2 t2.micro | 750 hrs/month for 12 months | ~$8.50/month after |
-| Lambda | 1 M requests + 400K GB-s/month forever | fractions of a cent/month |
-| SQS | 1 M requests/month forever | ~$0.40 per million |
+| ECS Fargate (0.25 vCPU + 0.5 GB) | None | ~$9.50/month |
+| Lambda | 1 M requests + 400K GB-s/month forever | ~$0/month |
+| SQS | 1 M requests/month forever | ~$0/month |
 | ECR | 500 MB/month | $0.10/GB after |
-| Elastic IP | Free while attached to running instance | $0.005/hr if unattached |
 | CloudWatch logs | 5 GB ingest + 5 GB storage/month | $0.50/GB after |
 
-**Bottom line:** within free-tier limits this stack costs $0/month. After the 12-month t2.micro free tier expires it will be ~$8.50/month.
+**Bottom line:** approximately **$9.50/month** to keep the Fargate task running continuously. Stop the task (desired count → 0) when not in use to pay only for the time it runs.
 
 The `serverless.yml` includes an AWS Budget that sends email alerts to `siddharth.gangadhar@gmail.com` at **$5 (50%)**, **$8 (80%)**, **$10 (100%)**, and a forecasted overrun. A CloudWatch billing alarm fires at $8 actual spend.
 
@@ -135,14 +134,52 @@ serverless deploy --stage prod --region us-east-1
 
 ## Step 5 — Find your API URL
 
+Fargate tasks get a dynamic public IP (it changes on each restart). Look it up with:
+
 ```bash
-aws cloudformation describe-stacks \
-  --stack-name groceror-infra-prod \
-  --query "Stacks[0].Outputs[?OutputKey=='GrocerPublicIP'].OutputValue" \
-  --output text
+REGION=us-east-1
+CLUSTER=groceror-cluster-prod
+SERVICE=groceror-api-prod
+
+TASK_ARN=$(aws ecs list-tasks \
+  --cluster $CLUSTER --service-name $SERVICE \
+  --query 'taskArns[0]' --output text --region $REGION)
+
+ENI_ID=$(aws ecs describe-tasks \
+  --cluster $CLUSTER --tasks $TASK_ARN --region $REGION \
+  --query 'tasks[0].attachments[0].details[?name==`networkInterfaceId`].value' \
+  --output text)
+
+aws ec2 describe-network-interfaces \
+  --network-interface-ids $ENI_ID --region $REGION \
+  --query 'NetworkInterfaces[0].Association.PublicIp' --output text
 ```
 
 The API will be reachable at `http://<IP>:8000`.
+
+> **Tip:** if you need a stable URL, put an Application Load Balancer in front of the service (adds ~$16/month), or use a free DNS provider that supports dynamic IPs.
+
+---
+
+## Stopping the task to avoid charges
+
+Since Fargate charges by the second, you can bring the cost to $0 by scaling down to zero tasks when not in use:
+
+```bash
+# Scale to zero (no charges while stopped)
+aws ecs update-service \
+  --cluster groceror-cluster-prod \
+  --service groceror-api-prod \
+  --desired-count 0 \
+  --region us-east-1
+
+# Scale back up when needed
+aws ecs update-service \
+  --cluster groceror-cluster-prod \
+  --service groceror-api-prod \
+  --desired-count 1 \
+  --region us-east-1
+```
 
 ---
 
@@ -153,7 +190,13 @@ The API will be reachable at `http://<IP>:8000`.
 docker build -t groceror-api /code/groceror
 docker tag groceror-api:latest $ACCOUNT.dkr.ecr.$REGION.amazonaws.com/groceror-api:latest
 docker push $ACCOUNT.dkr.ecr.$REGION.amazonaws.com/groceror-api:latest
-aws ecs update-service --cluster groceror-cluster-prod --service groceror-api-prod --force-new-deployment --region us-east-1
+
+# Force the service to pull the new image
+aws ecs update-service \
+  --cluster groceror-cluster-prod \
+  --service groceror-api-prod \
+  --force-new-deployment \
+  --region us-east-1
 
 # Companion services — just redeploy
 cd /code/groceror-users && serverless deploy --stage prod
@@ -175,33 +218,25 @@ cd /code/groceror
 The script:
 1. Removes Lambda stacks first (they import CloudFormation exports from the infra stack)
 2. Empties the ECR repository (CloudFormation can't delete a non-empty repo)
-3. Removes the infra CloudFormation stack (ECS, EC2, EIP, SQS, ECR, IAM, budget, alarm)
-4. Releases any unattached Elastic IPs (these cost $0.005/hr even when idle)
-5. Deletes SSM Parameter Store secrets under `/groceror/<stage>/`
-6. Cleans up Serverless Framework deployment S3 buckets
-7. Verifies no billable resources remain
+3. Removes the infra CloudFormation stack (ECS Fargate, VPC, SQS, ECR, IAM, budget, alarm)
+4. Deletes SSM Parameter Store secrets under `/groceror/<stage>/`
+5. Cleans up Serverless Framework deployment S3 buckets
+6. Verifies no billable resources remain
 
-After the script completes, check **AWS Billing → Cost Explorer** and **Billing → Free Tier Usage** to confirm $0 ongoing charges. Allow 10–15 minutes for the billing dashboard to refresh.
+After the script completes, check **AWS Billing → Cost Explorer** to confirm $0 ongoing charges. Allow 10–15 minutes for the billing dashboard to refresh.
 
 ### Emergency stop (if costs spike unexpectedly)
 
-If you receive a $10 budget alert and need to stop charges immediately without using the script:
+If you receive a $10 budget alert and need to stop Fargate charges immediately:
 
 ```bash
-# 1. Stop the ECS service (stops the EC2 task immediately)
+# Scale the service to zero — Fargate charges stop within seconds
 aws ecs update-service \
   --cluster groceror-cluster-prod \
   --service groceror-api-prod \
   --desired-count 0 \
   --region us-east-1
 
-# 2. Terminate the EC2 instance
-INSTANCE_ID=$(aws ec2 describe-instances \
-  --region us-east-1 \
-  --filters "Name=tag:aws:cloudformation:stack-name,Values=groceror-infra-prod" \
-  --query 'Reservations[0].Instances[0].InstanceId' --output text)
-aws ec2 terminate-instances --instance-ids "$INSTANCE_ID" --region us-east-1
-
-# 3. Then run the full teardown when you're ready
-./teardown_aws.sh
+# Then run the full teardown when you're ready
+cd /code/groceror && ./teardown_aws.sh
 ```

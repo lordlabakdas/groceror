@@ -121,33 +121,7 @@ else
   warn "$INFRA_DIR/serverless.yml not found — skipping stack removal"
 fi
 
-# ── Step 4: Release any orphaned Elastic IPs ──────────────────────────────────
-# EIPs not attached to a running instance cost $0.005/hour — release them.
-
-step "Checking for unattached Elastic IPs"
-
-ORPHANED=$(aws ec2 describe-addresses \
-  --region "$REGION" \
-  --query 'Addresses[?!InstanceId && !NetworkInterfaceId].AllocationId' \
-  --output json 2>/dev/null || echo "[]")
-
-if [[ "$ORPHANED" != "[]" && "$ORPHANED" != "" ]]; then
-  echo "   Found unattached EIPs — releasing..."
-  echo "$ORPHANED" | python3 -c "
-import json, sys, subprocess
-for alloc_id in json.load(sys.stdin):
-    result = subprocess.run(
-        ['aws', 'ec2', 'release-address', '--allocation-id', alloc_id, '--region', '$REGION'],
-        capture_output=True, text=True
-    )
-    status = '✓' if result.returncode == 0 else '⚠'
-    print(f'   {status} {alloc_id}')
-"
-else
-  ok "No unattached Elastic IPs found"
-fi
-
-# ── Step 5: Delete SSM Parameter Store secrets ────────────────────────────────
+# ── Step 4: Delete SSM Parameter Store secrets ────────────────────────────────
 
 step "Deleting SSM parameters under /groceror/$STAGE/"
 
@@ -210,14 +184,15 @@ else
   ok "No Serverless deployment buckets found"
 fi
 
-# ── Step 7: Verify nothing is still running ───────────────────────────────────
+# ── Step 5: Verify nothing is still running ───────────────────────────────────
 
 step "Verifying no billable resources remain"
 
-RUNNING_INSTANCES=$(aws ec2 describe-instances \
+# Check for Fargate tasks still running (Fargate charges by the second)
+RUNNING_TASKS=$(aws ecs list-tasks \
   --region "$REGION" \
-  --filters "Name=tag:Name,Values=groceror*" "Name=instance-state-name,Values=running,pending,stopping" \
-  --query 'Reservations[*].Instances[*].InstanceId' \
+  --cluster "groceror-cluster-$STAGE" \
+  --query 'taskArns' \
   --output json 2>/dev/null || echo "[]")
 
 ECS_CLUSTERS=$(aws ecs list-clusters \
@@ -225,11 +200,11 @@ ECS_CLUSTERS=$(aws ecs list-clusters \
   --query "clusterArns[?contains(@, 'groceror')]" \
   --output json 2>/dev/null || echo "[]")
 
-if [[ "$RUNNING_INSTANCES" != "[]" && "$RUNNING_INSTANCES" != "" ]]; then
-  warn "EC2 instances still running: $RUNNING_INSTANCES"
-  warn "Manually terminate via: aws ec2 terminate-instances --instance-ids <id> --region $REGION"
+if [[ "$RUNNING_TASKS" != "[]" && "$RUNNING_TASKS" != "" ]]; then
+  warn "Fargate tasks still running: $RUNNING_TASKS"
+  warn "Scale to zero: aws ecs update-service --cluster groceror-cluster-$STAGE --service groceror-api-$STAGE --desired-count 0 --region $REGION"
 else
-  ok "No groceror EC2 instances running"
+  ok "No Fargate tasks running"
 fi
 
 if [[ "$ECS_CLUSTERS" != "[]" && "$ECS_CLUSTERS" != "" ]]; then

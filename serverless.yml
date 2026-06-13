@@ -1,0 +1,383 @@
+service: groceror-infra
+frameworkVersion: "3"
+
+provider:
+  name: aws
+  region: ${opt:region, 'us-east-1'}
+  stage: ${opt:stage, 'prod'}
+
+# No Lambda functions — this stack is pure CloudFormation infrastructure.
+
+resources:
+  Resources:
+
+    # ── SQS Dead-Letter Queues ───────────────────────────────────────────────
+
+    UserEventsDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: user_events_queue_dlq
+        MessageRetentionPeriod: 1209600  # 14 days
+
+    EmailDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: email_queue_dlq
+        MessageRetentionPeriod: 1209600
+
+    OrderDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: order_queue_dlq
+        MessageRetentionPeriod: 1209600
+
+    # ── SQS Main Queues ──────────────────────────────────────────────────────
+
+    UserEventsQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: user_events_queue
+        VisibilityTimeout: 60
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt UserEventsDLQ.Arn
+          maxReceiveCount: 3
+
+    EmailQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: email_queue
+        VisibilityTimeout: 60
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt EmailDLQ.Arn
+          maxReceiveCount: 3
+
+    OrderQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: order_queue
+        VisibilityTimeout: 60
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt OrderDLQ.Arn
+          maxReceiveCount: 3
+
+    # ── ECR Repository ───────────────────────────────────────────────────────
+
+    GrocerECR:
+      Type: AWS::ECR::Repository
+      Properties:
+        RepositoryName: groceror-api
+
+    # ── CloudWatch Log Group ─────────────────────────────────────────────────
+
+    GrocerLogGroup:
+      Type: AWS::Logs::LogGroup
+      Properties:
+        LogGroupName: /ecs/groceror-api
+        RetentionInDays: 14
+
+    # ── VPC + public networking ──────────────────────────────────────────────
+    # Fargate tasks run in awsvpc mode and need a VPC with internet access.
+
+    GrocerVPC:
+      Type: AWS::EC2::VPC
+      Properties:
+        CidrBlock: 10.0.0.0/16
+        EnableDnsSupport: true
+        EnableDnsHostnames: true
+
+    GrocerIGW:
+      Type: AWS::EC2::InternetGateway
+
+    GrocerVPCGatewayAttachment:
+      Type: AWS::EC2::VPCGatewayAttachment
+      Properties:
+        VpcId: !Ref GrocerVPC
+        InternetGatewayId: !Ref GrocerIGW
+
+    GrocerPublicSubnet:
+      Type: AWS::EC2::Subnet
+      Properties:
+        VpcId: !Ref GrocerVPC
+        CidrBlock: 10.0.1.0/24
+        AvailabilityZone: !Select [0, !GetAZs '']
+
+    GrocerRouteTable:
+      Type: AWS::EC2::RouteTable
+      Properties:
+        VpcId: !Ref GrocerVPC
+
+    GrocerPublicRoute:
+      Type: AWS::EC2::Route
+      DependsOn: GrocerVPCGatewayAttachment
+      Properties:
+        RouteTableId: !Ref GrocerRouteTable
+        DestinationCidrBlock: 0.0.0.0/0
+        GatewayId: !Ref GrocerIGW
+
+    GrocerSubnetRTAssociation:
+      Type: AWS::EC2::SubnetRouteTableAssociation
+      Properties:
+        SubnetId: !Ref GrocerPublicSubnet
+        RouteTableId: !Ref GrocerRouteTable
+
+    # ── IAM: ECS task execution role (pull image from ECR, write logs) ───────
+
+    ECSExecutionRole:
+      Type: AWS::IAM::Role
+      Properties:
+        RoleName: groceror-ecs-execution-role-${self:provider.stage}
+        AssumeRolePolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service: ecs-tasks.amazonaws.com
+              Action: sts:AssumeRole
+        ManagedPolicyArns:
+          - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+
+    # ── IAM: ECS task role (publish to SQS from inside the container) ────────
+
+    ECSTaskRole:
+      Type: AWS::IAM::Role
+      Properties:
+        RoleName: groceror-ecs-task-role-${self:provider.stage}
+        AssumeRolePolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service: ecs-tasks.amazonaws.com
+              Action: sts:AssumeRole
+        Policies:
+          - PolicyName: SQSPublish
+            PolicyDocument:
+              Version: "2012-10-17"
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - sqs:SendMessage
+                    - sqs:GetQueueUrl
+                  Resource:
+                    - !GetAtt UserEventsQueue.Arn
+                    - !GetAtt EmailQueue.Arn
+                    - !GetAtt OrderQueue.Arn
+
+    # ── Security Group ───────────────────────────────────────────────────────
+
+    AppSecurityGroup:
+      Type: AWS::EC2::SecurityGroup
+      Properties:
+        GroupDescription: groceror API inbound rules
+        VpcId: !Ref GrocerVPC
+        SecurityGroupIngress:
+          - IpProtocol: tcp
+            FromPort: 8000
+            ToPort: 8000
+            CidrIp: 0.0.0.0/0
+          - IpProtocol: tcp
+            FromPort: 443
+            ToPort: 443
+            CidrIp: 0.0.0.0/0
+
+    # ── ECS Cluster ──────────────────────────────────────────────────────────
+
+    GrocerCluster:
+      Type: AWS::ECS::Cluster
+      Properties:
+        ClusterName: groceror-cluster-${self:provider.stage}
+
+    # ── ECS Task Definition ──────────────────────────────────────────────────
+    # Sensitive values (DATABASE_URL, JWT_SECRET_KEY, Twilio) must be stored in
+    # SSM Parameter Store under /groceror/<stage>/<KEY> before deploying.
+    # Run: aws ssm put-parameter --name /groceror/prod/DATABASE_URL --value "..." --type SecureString
+
+    GrocerTaskDef:
+      Type: AWS::ECS::TaskDefinition
+      Properties:
+        Family: groceror-api-${self:provider.stage}
+        NetworkMode: awsvpc           # required for Fargate
+        RequiresCompatibilities:
+          - FARGATE
+        Cpu: "256"                    # 0.25 vCPU (~$0.012/hr)
+        Memory: "512"                 # 512 MB  (~$0.001/hr)
+        TaskRoleArn: !GetAtt ECSTaskRole.Arn
+        ExecutionRoleArn: !GetAtt ECSExecutionRole.Arn
+        ContainerDefinitions:
+          - Name: groceror-api
+            Image: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/groceror-api:latest"
+            PortMappings:
+              - ContainerPort: 8000
+                Protocol: tcp
+            Essential: true
+            Environment:
+              - Name: USER_EVENTS_QUEUE_URL
+                Value: !Ref UserEventsQueue
+              - Name: EMAIL_QUEUE_URL
+                Value: !Ref EmailQueue
+              - Name: ORDER_QUEUE_URL
+                Value: !Ref OrderQueue
+              - Name: AWS_REGION
+                Value: !Ref AWS::Region
+            Secrets:
+              - Name: DATABASE_URL
+                ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/groceror/${self:provider.stage}/DATABASE_URL"
+              - Name: JWT_SECRET_KEY
+                ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/groceror/${self:provider.stage}/JWT_SECRET_KEY"
+              - Name: TWILIO_ACCOUNT_SID
+                ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/groceror/${self:provider.stage}/TWILIO_ACCOUNT_SID"
+              - Name: TWILIO_AUTH_TOKEN
+                ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/groceror/${self:provider.stage}/TWILIO_AUTH_TOKEN"
+              - Name: TWILIO_FROM_NUMBER
+                ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/groceror/${self:provider.stage}/TWILIO_FROM_NUMBER"
+              - Name: MONGO_URI
+                ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/groceror/${self:provider.stage}/MONGO_URI"
+            LogConfiguration:
+              LogDriver: awslogs
+              Options:
+                awslogs-group: /ecs/groceror-api
+                awslogs-region: !Ref AWS::Region
+                awslogs-stream-prefix: groceror
+
+    # ── ECS Service (keeps one Fargate task running, restarts on crash) ────────
+
+    GrocerService:
+      Type: AWS::ECS::Service
+      DependsOn: GrocerPublicRoute    # ensure internet routing is ready
+      Properties:
+        ServiceName: groceror-api-${self:provider.stage}
+        Cluster: !Ref GrocerCluster
+        TaskDefinition: !Ref GrocerTaskDef
+        DesiredCount: 1
+        LaunchType: FARGATE
+        NetworkConfiguration:
+          AwsvpcConfiguration:
+            AssignPublicIp: ENABLED   # task gets a public IP directly on its ENI
+            Subnets:
+              - !Ref GrocerPublicSubnet
+            SecurityGroups:
+              - !Ref AppSecurityGroup
+
+    # ── Cost guardrails ───────────────────────────────────────────────────────
+    # Requires billing alerts to be enabled in the AWS Console first:
+    #   Billing Dashboard → Preferences → "Receive Billing Alerts"
+
+    # SNS topic so the budget can fan out to email
+    BillingAlertTopic:
+      Type: AWS::SNS::Topic
+      Properties:
+        TopicName: groceror-billing-alerts-${self:provider.stage}
+        Subscription:
+          - Protocol: email
+            Endpoint: ${env:ALERT_EMAIL, 'siddharth.gangadhar@gmail.com'}
+
+    # CloudWatch alarm fires when estimated charges exceed $8 in a calendar month.
+    # Billing metrics are published to us-east-1 regardless of the stack region.
+    BillingAlarm:
+      Type: AWS::CloudWatch::Alarm
+      Properties:
+        AlarmName: groceror-monthly-charges-${self:provider.stage}
+        AlarmDescription: "Groceror monthly AWS charges exceeded $8 — consider running teardown_aws.sh"
+        Namespace: AWS/Billing
+        MetricName: EstimatedCharges
+        Dimensions:
+          - Name: Currency
+            Value: USD
+        Statistic: Maximum
+        Period: 86400      # checked daily
+        EvaluationPeriods: 1
+        Threshold: 8
+        ComparisonOperator: GreaterThanThreshold
+        TreatMissingData: notBreaching
+        AlarmActions:
+          - !Ref BillingAlertTopic
+
+    # AWS Budget: hard monthly limit of $10 with alerts at 50 %, 80 %, and 100 %
+    GrocerMonthlyBudget:
+      Type: AWS::Budgets::Budget
+      Properties:
+        Budget:
+          BudgetName: groceror-monthly-${self:provider.stage}
+          BudgetType: COST
+          TimeUnit: MONTHLY
+          BudgetLimit:
+            Amount: 10
+            Unit: USD
+        NotificationsWithSubscribers:
+          - Notification:
+              NotificationType: ACTUAL
+              ComparisonOperator: GREATER_THAN
+              Threshold: 50        # $5 — first warning
+              ThresholdType: PERCENTAGE
+            Subscribers:
+              - SubscriptionType: EMAIL
+                Address: ${env:ALERT_EMAIL, 'siddharth.gangadhar@gmail.com'}
+          - Notification:
+              NotificationType: ACTUAL
+              ComparisonOperator: GREATER_THAN
+              Threshold: 80        # $8 — serious warning
+              ThresholdType: PERCENTAGE
+            Subscribers:
+              - SubscriptionType: EMAIL
+                Address: ${env:ALERT_EMAIL, 'siddharth.gangadhar@gmail.com'}
+          - Notification:
+              NotificationType: ACTUAL
+              ComparisonOperator: GREATER_THAN
+              Threshold: 100       # $10 — run teardown immediately
+              ThresholdType: PERCENTAGE
+            Subscribers:
+              - SubscriptionType: EMAIL
+                Address: ${env:ALERT_EMAIL, 'siddharth.gangadhar@gmail.com'}
+          - Notification:
+              NotificationType: FORECASTED
+              ComparisonOperator: GREATER_THAN
+              Threshold: 100       # forecasted to exceed $10
+              ThresholdType: PERCENTAGE
+            Subscribers:
+              - SubscriptionType: EMAIL
+                Address: ${env:ALERT_EMAIL, 'siddharth.gangadhar@gmail.com'}
+
+  # ── CloudFormation Exports (consumed by companion service stacks) ──────────
+
+  Outputs:
+
+    UserEventsQueueArn:
+      Value: !GetAtt UserEventsQueue.Arn
+      Export:
+        Name: groceror-infra-${self:provider.stage}-UserEventsQueueArn
+
+    UserEventsQueueUrl:
+      Value: !Ref UserEventsQueue
+      Export:
+        Name: groceror-infra-${self:provider.stage}-UserEventsQueueUrl
+
+    EmailQueueArn:
+      Value: !GetAtt EmailQueue.Arn
+      Export:
+        Name: groceror-infra-${self:provider.stage}-EmailQueueArn
+
+    EmailQueueUrl:
+      Value: !Ref EmailQueue
+      Export:
+        Name: groceror-infra-${self:provider.stage}-EmailQueueUrl
+
+    OrderQueueArn:
+      Value: !GetAtt OrderQueue.Arn
+      Export:
+        Name: groceror-infra-${self:provider.stage}-OrderQueueArn
+
+    OrderQueueUrl:
+      Value: !Ref OrderQueue
+      Export:
+        Name: groceror-infra-${self:provider.stage}-OrderQueueUrl
+
+    ECSClusterName:
+      Value: !Ref GrocerCluster
+      Description: ECS cluster name (use with aws ecs list-tasks to find the Fargate task IP)
+      Export:
+        Name: groceror-infra-${self:provider.stage}-ECSClusterName
+
+    ECSServiceName:
+      Value: !GetAtt GrocerService.Name
+      Export:
+        Name: groceror-infra-${self:provider.stage}-ECSServiceName

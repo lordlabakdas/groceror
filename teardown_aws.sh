@@ -149,14 +149,14 @@ else
   ok "No SSM parameters found under /groceror/$STAGE/"
 fi
 
-# ── Step 6: Remove Serverless Framework deployment S3 buckets ─────────────────
+# ── Step 5: Remove Serverless Framework deployment S3 buckets ─────────────────
 # Serverless Framework creates a bucket per service (holds CloudFormation templates
 # and Lambda ZIPs). These are not deleted by 'serverless remove' by default.
 
 step "Cleaning up Serverless Framework deployment S3 buckets"
 
 SLS_BUCKETS=$(aws s3api list-buckets \
-  --query "Buckets[?contains(Name, 'serverless') && contains(Name, '$REGION')].Name" \
+  --query "Buckets[?contains(Name, 'groceror') && contains(Name, 'serverless') && contains(Name, '$REGION')].Name" \
   --output json 2>/dev/null || echo "[]")
 
 if [[ "$SLS_BUCKETS" != "[]" && "$SLS_BUCKETS" != "" ]]; then
@@ -184,7 +184,7 @@ else
   ok "No Serverless deployment buckets found"
 fi
 
-# ── Step 5: Verify nothing is still running ───────────────────────────────────
+# ── Step 6: Verify nothing is still running ───────────────────────────────────
 
 step "Verifying no billable resources remain"
 

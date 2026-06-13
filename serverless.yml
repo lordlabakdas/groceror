@@ -230,6 +230,8 @@ resources:
                 ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/groceror/${self:provider.stage}/TWILIO_AUTH_TOKEN"
               - Name: TWILIO_FROM_NUMBER
                 ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/groceror/${self:provider.stage}/TWILIO_FROM_NUMBER"
+              - Name: MONGO_URI
+                ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/groceror/${self:provider.stage}/MONGO_URI"
             LogConfiguration:
               LogDriver: awslogs
               Options:

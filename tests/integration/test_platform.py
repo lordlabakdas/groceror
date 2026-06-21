@@ -402,7 +402,12 @@ class TestOrders:
         data = r.json()
         assert "id" in data
         assert data["status"] == "pending"
-        mock_publish.assert_called_once()
+        assert mock_publish.call_count == 2
+        calls = {c.kwargs["queue_name"] for c in mock_publish.call_args_list}
+        assert calls == {"order_queue", "email_queue"}
+        email_call = next(c for c in mock_publish.call_args_list if c.kwargs["queue_name"] == "email_queue")
+        assert email_call.kwargs["recipient"] == user_profile["email"]
+        assert data["id"] in email_call.kwargs["subject"]
 
     @patch("engine.publisher.publish_message")
     def test_create_order_empty_items_rejected(self, mock_publish, user_token, user_profile):

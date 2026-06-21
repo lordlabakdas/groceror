@@ -135,6 +135,23 @@ async def create_order(
     except Exception:
         logger.warning("order_id=%s was saved but could not be published", order_entity.id)
 
+    try:
+        publisher.publish_message(
+            queue_name=publisher.EMAIL_QUEUE,
+            routing_key=publisher.EMAIL_QUEUE,
+            event="send_email",
+            recipient=current_user.email,
+            subject=f"Order #{order_entity.id} confirmed",
+            body=(
+                f"Hi {current_user.name},\n\n"
+                f"Your order #{order_entity.id} has been placed successfully.\n"
+                f"Total: ${order_entity.total_price:.2f}\n\n"
+                "Thank you for shopping with Groceror!"
+            ),
+        )
+    except Exception:
+        logger.warning("order_id=%s email notification could not be published", order_entity.id)
+
     return OrderCreatedResponse(id=order_entity.id, status=order_entity.status)
 
 

@@ -1,5 +1,7 @@
 # grocerer - A platform for any shop owner
 
+See [ARCHITECTURE.md](ARCHITECTURE.md) for a system diagram.
+
 - An interface between the local grocery store owner and the consumer
 
 - Primarily a store owner driven platform as opposed to ind. decider

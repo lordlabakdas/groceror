@@ -112,6 +112,36 @@ See the [groceror-email README](https://github.com/lordlabakdas/groceror-email) 
 
 -----
 
+## Seeding the Database
+
+The `seed_db/` folder contains scripts for populating a local database with test data.
+
+### Setup
+
+Add a `SEED_PASSWORD` to your `.env` file — this becomes the hashed password for all seeded records:
+
+```
+SEED_PASSWORD=your_dev_password_here
+```
+
+### Seed users
+
+```bash
+python seed_db/seed_users.py
+```
+
+Creates two test users (Alice and Bob), each with a corresponding `PhoneVerification` row.
+
+### Seed inventory
+
+```bash
+python seed_db/seed_inventory.py
+```
+
+Creates a test store and 6 inventory items across all categories (`DAIRY`, `BAKERY`, `MEAT`, `PRODUCE`, `GROCERY`). Re-running is safe — the store is looked up by email and skipped if it already exists.
+
+-----
+
 ## Database Migrations
 
 Schema changes are managed with [Alembic](https://alembic.sqlalchemy.org/). Never edit the database schema by hand — every change goes through a migration file.

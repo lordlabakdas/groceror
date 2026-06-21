@@ -46,6 +46,7 @@ class OrderService:
                 status="pending",
             )
             db_session.add(order_entity)
+            db_session.flush()  # write Order row before FK-constrained OrderItems
 
             for item in order.items:
                 db_session.add(OrderItem(

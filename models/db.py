@@ -12,6 +12,7 @@ from models.entity.orders_entity import Order  # noqa: F401
 from models.entity.stock_threshold_entity import StockThreshold  # noqa: F401
 from models.entity.inventory_expiry_entity import InventoryExpiry  # noqa: F401
 from models.entity.order_item_entity import OrderItem  # noqa: F401
+from models.entity.product_entity import Product  # noqa: F401
 
 engine = create_engine(
     DBConfig.DB_URL, echo=True, connect_args={"options": "-c search_path=public"}, pool_pre_ping=True

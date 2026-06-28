@@ -19,21 +19,21 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.create_table(
-        'product',
-        sa.Column('id', sa.Uuid(), nullable=False),
-        sa.Column('name', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
-        sa.Column('category', sa.Enum('GROCERY', 'PRODUCE', 'MEAT', 'DAIRY', 'BAKERY', 'OTHER', name='inventorycategory'), nullable=False),
-        sa.Column('image_url', sqlmodel.sql.sqltypes.AutoString(), nullable=True),
-        sa.Column('default_price', sa.Float(), nullable=False),
-        sa.Column('created_at', sa.DateTime(), nullable=False),
-        sa.Column('updated_at', sa.DateTime(), nullable=False),
-        sa.PrimaryKeyConstraint('id'),
-        sa.UniqueConstraint('name'),
-    )
-    op.create_index(op.f('ix_product_name'), 'product', ['name'], unique=True)
+    op.execute("""
+        CREATE TABLE product (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            name VARCHAR NOT NULL,
+            category inventorycategory NOT NULL,
+            image_url VARCHAR,
+            default_price FLOAT NOT NULL DEFAULT 0.0,
+            created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+            CONSTRAINT uq_product_name UNIQUE (name)
+        )
+    """)
+    op.execute("CREATE INDEX ix_product_name ON product (name)")
 
 
 def downgrade() -> None:
-    op.drop_index(op.f('ix_product_name'), table_name='product')
-    op.drop_table('product')
+    op.execute("DROP INDEX IF EXISTS ix_product_name")
+    op.execute("DROP TABLE IF EXISTS product")

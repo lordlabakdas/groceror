@@ -29,6 +29,10 @@ from models.entity.dispute_entity import Dispute  # noqa: F401
 from models.entity.dispute_message_entity import DisputeMessage  # noqa: F401
 from models.entity.bulk_rule_entity import BulkRule  # noqa: F401
 from models.entity.bulk_rule_item_entity import BulkRuleItem  # noqa: F401
+from models.entity.wishlist_item_entity import WishlistItem  # noqa: F401
+from models.entity.product_review_entity import ProductReview  # noqa: F401
+from models.entity.scheduled_order_entity import ScheduledOrder  # noqa: F401
+from models.entity.scheduled_order_item_entity import ScheduledOrderItem  # noqa: F401
 
 alembic_cfg = context.config
 

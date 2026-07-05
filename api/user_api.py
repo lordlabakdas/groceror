@@ -204,13 +204,6 @@ async def set_profile(
         )
 
 
-@user_apis.post("/otp")
-async def send_otp_legacy(phone: str):
-    """Legacy endpoint for backward compatibility"""
-    otp = auth_helper.send_otp(phone=phone)
-    return {"otp": otp}
-
-
 @user_apis.post("/login", response_model=LoginResponse)
 async def login(login_payload: LoginPayload):
     logger.info(f"Logging in user with payload: {login_payload.model_dump()}")

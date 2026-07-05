@@ -27,9 +27,9 @@ from models.entity.stock_threshold_entity import StockThreshold
 logger = logging.getLogger(__name__)
 dashboard_apis = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
-# Matches the frontend's hardcoded low-stock rule (quantity < 5) for items
+# Matches the frontend's "Low Stock" badge rule (quantity < 20) for items
 # without an explicit per-item threshold.
-DEFAULT_LOW_STOCK_THRESHOLD = 5
+DEFAULT_LOW_STOCK_THRESHOLD = 20
 
 
 def _compute_top_sellers(

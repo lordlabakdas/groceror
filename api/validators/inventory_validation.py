@@ -116,3 +116,13 @@ class DashboardResponse(BaseModel):
     todays_summary: TodaysSummary
     expiring_soon: List[ExpiringItem]
     top_sellers: List[TopSellerItem]
+
+
+class RevenueTrendPoint(BaseModel):
+    date: date
+    revenue: float
+    order_count: int
+
+
+class RevenueTrendResponse(BaseModel):
+    trend: List[RevenueTrendPoint]

@@ -11,6 +11,8 @@ from api.validators.inventory_validation import (
     DashboardResponse,
     ExpiringItem,
     LowStockItem,
+    RevenueTrendPoint,
+    RevenueTrendResponse,
     TodaysOrder,
     TodaysSummary,
     TopSellerItem,
@@ -161,3 +163,45 @@ async def get_dashboard(user: PhoneVerification = Depends(auth_required)):
         expiring_soon=expiring_soon,
         top_sellers=top_sellers,
     )
+
+
+@dashboard_apis.get("/revenue-trend", response_model=RevenueTrendResponse)
+async def get_revenue_trend(
+    days: int = 30,
+    user: PhoneVerification = Depends(auth_required),
+):
+    """Daily revenue and order counts for the store over the last `days` days."""
+    helper = InventoryHelper(user=user)
+    try:
+        store = helper._require_store()
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+
+    days = max(1, min(days, 365))
+    today = datetime.utcnow().date()
+    window_start = datetime.combine(today - timedelta(days=days - 1), datetime.min.time())
+
+    orders = db_session.exec(
+        select(OrderEntity).where(
+            OrderEntity.store_id == store.id,
+            OrderEntity.order_date >= window_start,
+            OrderEntity.status != "cancelled",
+        )
+    ).all()
+
+    by_day: dict[date, dict] = {}
+    for o in orders:
+        day = o.order_date.date()
+        bucket = by_day.setdefault(day, {"revenue": 0.0, "order_count": 0})
+        bucket["revenue"] += o.total_price
+        bucket["order_count"] += 1
+
+    trend = [
+        RevenueTrendPoint(
+            date=(day := today - timedelta(days=offset)),
+            revenue=round(by_day.get(day, {}).get("revenue", 0.0), 2),
+            order_count=by_day.get(day, {}).get("order_count", 0),
+        )
+        for offset in range(days - 1, -1, -1)
+    ]
+    return RevenueTrendResponse(trend=trend)

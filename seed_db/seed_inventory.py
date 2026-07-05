@@ -72,7 +72,20 @@ def seed():
     with Session(engine) as session:
         store = _get_or_create_store(session, hashed)
 
+        inserted = 0
+        skipped = 0
         for item in INVENTORY_ITEMS:
+            existing = session.exec(
+                select(Inventory).where(
+                    Inventory.store_id == store.id,
+                    Inventory.name == item["name"],
+                )
+            ).first()
+            if existing:
+                print(f"  ~ skipping (already exists): {item['name']}")
+                skipped += 1
+                continue
+
             inventory = Inventory(
                 name=item["name"],
                 category=item["category"],
@@ -82,9 +95,10 @@ def seed():
             )
             session.add(inventory)
             print(f"  + inventory: {inventory.name} ({inventory.category}, qty={inventory.quantity})")
+            inserted += 1
 
         session.commit()
-        print(f"\nInserted {len(INVENTORY_ITEMS)} inventory items for store '{store.name}'.")
+        print(f"\nDone — inserted {inserted} inventory items, skipped {skipped} for store '{store.name}'.")
 
 
 if __name__ == "__main__":

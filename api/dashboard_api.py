@@ -27,6 +27,10 @@ from models.entity.stock_threshold_entity import StockThreshold
 logger = logging.getLogger(__name__)
 dashboard_apis = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
+# Matches the frontend's hardcoded low-stock rule (quantity < 5) for items
+# without an explicit per-item threshold.
+DEFAULT_LOW_STOCK_THRESHOLD = 5
+
 
 def _compute_top_sellers(
     order_items: list,
@@ -68,17 +72,26 @@ async def get_dashboard(user: PhoneVerification = Depends(auth_required)):
     inventory_ids = list(inventory_map.keys())
 
     # --- Low stock -----------------------------------------------------------
+    # Items with an explicit threshold are low when quantity <= threshold.
+    # Items without one fall back to the default the frontend also uses
+    # (quantity < 5), so Myventory and the dashboard always agree.
     low_stock: list[LowStockItem] = []
     if inventory_ids:
-        thresholds = db_session.exec(
+        threshold_rows = db_session.exec(
             select(StockThreshold).where(StockThreshold.inventory_id.in_(inventory_ids))
         ).all()
-        for t in thresholds:
-            item = inventory_map.get(t.inventory_id)
-            if item and item.quantity <= t.threshold:
+        explicit_thresholds = {t.inventory_id: t.threshold for t in threshold_rows}
+        for item in inventory_items:
+            threshold = explicit_thresholds.get(item.id)
+            if threshold is not None:
+                is_low = item.quantity <= threshold
+            else:
+                threshold = DEFAULT_LOW_STOCK_THRESHOLD
+                is_low = item.quantity < DEFAULT_LOW_STOCK_THRESHOLD
+            if is_low:
                 low_stock.append(LowStockItem(
                     id=item.id, name=item.name,
-                    quantity=item.quantity, threshold=t.threshold,
+                    quantity=item.quantity, threshold=threshold,
                 ))
 
     # --- Today's orders ------------------------------------------------------

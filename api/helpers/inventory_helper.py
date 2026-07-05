@@ -10,6 +10,7 @@ from models.db import db_session
 from models.entity.inventory_entity import Inventory, InventoryCategory
 from models.entity.inventory_expiry_entity import InventoryExpiry
 from models.entity.phone_verification import PhoneVerification
+from models.entity.promotion_entity import Promotion
 from models.entity.store_entity import Store
 
 logger = logging.getLogger()
@@ -83,6 +84,17 @@ class InventoryHelper:
                 earliest.setdefault(e.inventory_id, e.expiry_date)
             for row in rows:
                 row["expiry_date"] = earliest.get(row["id"])
+
+            promos = db_session.exec(
+                select(Promotion).where(
+                    Promotion.inventory_id.in_(inventory_ids),
+                    Promotion.start_date <= date.today(),
+                    Promotion.end_date >= date.today(),
+                )
+            ).all()
+            promo_map = {p.inventory_id: p.sale_price for p in promos}
+            for row in rows:
+                row["sale_price"] = promo_map.get(row["id"])
         return rows
 
     def get_inventory_by_category(self, category: Enum) -> List[Dict]:

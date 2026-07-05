@@ -28,6 +28,7 @@ class StoreInventory(BaseModel):
     store_id: UUID
     notes: Optional[str] = None
     expiry_date: Optional[date] = None
+    sale_price: Optional[float] = None  # active promotion price, if any
 
 
 class StoreInventoryResponse(BaseModel):
@@ -56,6 +57,13 @@ class SearchResultItem(BaseModel):
     notes: Optional[str]
     store_id: UUID
     store_name: str
+    sale_price: Optional[float] = None
+
+
+class SetPromotionPayload(BaseModel):
+    sale_price: float = PydanticField(gt=0)
+    start_date: date
+    end_date: date
 
 
 class SearchResponse(BaseModel):

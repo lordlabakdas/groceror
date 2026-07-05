@@ -13,6 +13,8 @@ from models.entity.stock_threshold_entity import StockThreshold  # noqa: F401
 from models.entity.inventory_expiry_entity import InventoryExpiry  # noqa: F401
 from models.entity.order_item_entity import OrderItem  # noqa: F401
 from models.entity.product_entity import Product  # noqa: F401
+from models.entity.promotion_entity import Promotion  # noqa: F401
+from models.entity.store_rating_entity import StoreRating  # noqa: F401
 
 engine = create_engine(
     DBConfig.DB_URL, echo=True, connect_args={"options": "-c search_path=public"}, pool_pre_ping=True

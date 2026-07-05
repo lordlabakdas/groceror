@@ -17,6 +17,8 @@ from models.entity.inventory_expiry_entity import InventoryExpiry  # noqa: F401
 from models.entity.cart_entity import CartEntity  # noqa: F401
 from models.entity.cart_item_entity import CartItemEntity  # noqa: F401
 from models.entity.product_entity import Product  # noqa: F401
+from models.entity.promotion_entity import Promotion  # noqa: F401
+from models.entity.store_rating_entity import StoreRating  # noqa: F401
 
 alembic_cfg = context.config
 

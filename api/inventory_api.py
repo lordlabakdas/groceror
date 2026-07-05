@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime
+from datetime import date, datetime
 from typing import List, Optional
 
 from uuid import UUID
@@ -15,6 +15,7 @@ from api.validators.inventory_validation import (
     SearchResponse,
     SearchResultItem,
     SetExpiryPayload,
+    SetPromotionPayload,
     SetThresholdPayload,
     StoreInventory,
     StoreInventoryResponse,
@@ -26,6 +27,7 @@ from models.db import db_session
 from models.entity.inventory_entity import Inventory, InventoryCategory
 from models.entity.inventory_expiry_entity import InventoryExpiry
 from models.entity.phone_verification import PhoneVerification
+from models.entity.promotion_entity import Promotion
 from models.entity.stock_threshold_entity import StockThreshold
 from models.entity.store_entity import Store
 from models.entity.user_entity import User
@@ -139,6 +141,67 @@ async def set_inventory_expiry(
     return {"status": "success"}
 
 
+@inventory_apis.post("/{inventory_id}/promotion", response_model=UpdateInventoryResponse)
+async def set_promotion(
+    inventory_id: UUID,
+    payload: SetPromotionPayload,
+    user: PhoneVerification = Depends(auth_required),
+):
+    helper = InventoryHelper(user=user)
+    try:
+        store = helper._require_store()
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+    item = db_session.exec(
+        select(Inventory).where(Inventory.id == inventory_id, Inventory.store_id == store.id)
+    ).first()
+    if not item:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Inventory item not found")
+    if payload.end_date < payload.start_date:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="end_date must be on or after start_date")
+    existing = db_session.exec(
+        select(Promotion).where(Promotion.inventory_id == inventory_id)
+    ).first()
+    if existing:
+        existing.sale_price = payload.sale_price
+        existing.start_date = payload.start_date
+        existing.end_date = payload.end_date
+        existing.updated_at = datetime.utcnow()
+    else:
+        db_session.add(Promotion(
+            inventory_id=inventory_id,
+            sale_price=payload.sale_price,
+            start_date=payload.start_date,
+            end_date=payload.end_date,
+        ))
+    db_session.commit()
+    return {"status": "success"}
+
+
+@inventory_apis.delete("/{inventory_id}/promotion", response_model=UpdateInventoryResponse)
+async def delete_promotion(
+    inventory_id: UUID,
+    user: PhoneVerification = Depends(auth_required),
+):
+    helper = InventoryHelper(user=user)
+    try:
+        store = helper._require_store()
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+    item = db_session.exec(
+        select(Inventory).where(Inventory.id == inventory_id, Inventory.store_id == store.id)
+    ).first()
+    if not item:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Inventory item not found")
+    promo = db_session.exec(
+        select(Promotion).where(Promotion.inventory_id == inventory_id)
+    ).first()
+    if promo:
+        db_session.delete(promo)
+        db_session.commit()
+    return {"status": "success"}
+
+
 @inventory_apis.put("/{inventory_id}", response_model=UpdateInventoryResponse)
 async def update_inventory(
     inventory_id: UUID,
@@ -187,6 +250,19 @@ async def search_inventory(
     ).all()
     store_map = {store.id: store.name for store in active_stores}
 
+    visible = [item for item in items if item.store_id in store_map]
+    if visible:
+        promos = db_session.exec(
+            select(Promotion).where(
+                Promotion.inventory_id.in_([item.id for item in visible]),
+                Promotion.start_date <= date.today(),
+                Promotion.end_date >= date.today(),
+            )
+        ).all()
+        promo_map = {p.inventory_id: p.sale_price for p in promos}
+    else:
+        promo_map = {}
+
     return SearchResponse(
         query=q,
         results=[
@@ -199,9 +275,9 @@ async def search_inventory(
                 notes=item.notes,
                 store_id=item.store_id,
                 store_name=store_map[item.store_id],
+                sale_price=promo_map.get(item.id),
             )
-            for item in items
-            if item.store_id in store_map
+            for item in visible
         ],
     )
 
@@ -214,7 +290,23 @@ async def browse_store_inventory(
     items = db_session.exec(
         select(Inventory).where(Inventory.store_id == store_id)
     ).all()
-    return StoreInventoryResponse(inventory=[StoreInventory(**item.to_dict()) for item in items])
+    if items:
+        promos = db_session.exec(
+            select(Promotion).where(
+                Promotion.inventory_id.in_([item.id for item in items]),
+                Promotion.start_date <= date.today(),
+                Promotion.end_date >= date.today(),
+            )
+        ).all()
+        promo_map = {p.inventory_id: p.sale_price for p in promos}
+    else:
+        promo_map = {}
+    return StoreInventoryResponse(
+        inventory=[
+            StoreInventory(**item.to_dict(), sale_price=promo_map.get(item.id))
+            for item in items
+        ]
+    )
 
 
 @inventory_apis.delete("/delete-inventory", response_model=DeleteInventoryResponse)

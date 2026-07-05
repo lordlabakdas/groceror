@@ -7,6 +7,7 @@ instance means all HTTP calls share one portal thread and one DB connection,
 avoiding connection-pool exhaustion during long test runs.
 """
 from fastapi.testclient import TestClient
+from sqlmodel import select
 
 from main import app
 
@@ -36,3 +37,21 @@ class _LazyTestClient:
 
 
 client: TestClient = _LazyTestClient()  # type: ignore[assignment]
+
+
+def get_test_otp(phone: str) -> str:
+    """Read the OTP stored in the test DB for *phone*.
+
+    The /user/otp API endpoint was removed (security: it returned OTPs over
+    HTTP).  Tests that need the OTP for the registration flow use this helper
+    instead — it only works because the tests have direct DB access.
+    """
+    from models.db import db_session
+    from models.entity.phone_verification import PhoneVerification
+
+    pv = db_session.exec(
+        select(PhoneVerification).where(PhoneVerification.phone == phone)
+    ).first()
+    if pv is None or pv.otp is None:
+        raise ValueError(f"No OTP found for phone {phone!r}")
+    return pv.otp

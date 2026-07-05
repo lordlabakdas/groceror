@@ -4,7 +4,7 @@ Unit-level API tests for core authentication endpoints.
 These tests exercise individual endpoints in isolation without relying on
 cross-test fixtures or pre-seeded DB state.
 """
-from tests._client import client
+from tests._client import client, get_test_otp
 
 
 def test_send_otp():
@@ -52,9 +52,9 @@ def test_complete_registration_flow():
     response = client.post("/user/send-otp", json={"phone": phone})
     assert response.status_code == 200
 
-    # Step 2: Get the OTP via legacy endpoint
-    otp_response = client.post("/user/otp", params={"phone": phone})
-    otp = otp_response.json()["otp"]
+    # Step 2: Read OTP directly from the test DB (the /user/otp endpoint was
+    # removed because returning OTPs over HTTP is a security vulnerability).
+    otp = get_test_otp(phone)
 
     # Step 3: Verify OTP
     response = client.post("/user/verify-otp", json={"phone": phone, "otp": otp})
@@ -77,9 +77,9 @@ def test_login():
     """Test user login with phone and password after completing the full registration flow."""
     phone = "+1234567890"
 
-    # Ensure the user is registered and verified (idempotent with test_complete_registration_flow)
-    otp_response = client.post("/user/otp", params={"phone": phone})
-    otp = otp_response.json()["otp"]
+    # Re-run the OTP flow (OTP is cleared after each verification, so we need a fresh one).
+    client.post("/user/send-otp", json={"phone": phone})
+    otp = get_test_otp(phone)
     client.post("/user/verify-otp", json={"phone": phone, "otp": otp})
     client.post(
         "/user/register",

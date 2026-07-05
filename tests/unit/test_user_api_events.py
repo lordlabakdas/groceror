@@ -4,14 +4,13 @@ publisher.publish_message is mocked — no RabbitMQ connection required.
 """
 from unittest.mock import patch
 
-from tests._client import client
+from tests._client import client, get_test_otp
 
 
 def _register_user(phone: str) -> None:
     """Helper: full OTP flow so a user is registered and verified."""
     client.post("/user/send-otp", json={"phone": phone})
-    otp_resp = client.post("/user/otp", params={"phone": phone})
-    otp = otp_resp.json()["otp"]
+    otp = get_test_otp(phone)
     client.post("/user/verify-otp", json={"phone": phone, "otp": otp})
 
 
@@ -35,8 +34,7 @@ def test_register_publishes_user_registered():
 def test_verify_otp_publishes_otp_verified():
     phone = "+15550000002"
     client.post("/user/send-otp", json={"phone": phone})
-    otp_resp = client.post("/user/otp", params={"phone": phone})
-    otp = otp_resp.json()["otp"]
+    otp = get_test_otp(phone)
     with patch("api.user_api.publisher.publish_message") as mock_pub:
         resp = client.post("/user/verify-otp", json={"phone": phone, "otp": otp})
     assert resp.status_code == 200

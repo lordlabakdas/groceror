@@ -104,6 +104,9 @@ async def get_order_history(current_user: User = Depends(_get_user_profile)):
             OrderHistoryItem(
                 id=o.id,
                 total_price=o.total_price,
+                discount_amount=o.discount_amount,
+                points_redeemed=o.points_redeemed,
+                coupon_code=o.coupon_code,
                 status=o.status,
                 items=items_by_order[o.id],
                 order_date=o.order_date,
@@ -122,7 +125,7 @@ async def create_order(
 ):
     logger.info("Creating order for user %s", current_user.id)
     try:
-        order_entity = OrderService().create_order(order, current_user)
+        order_entity, points_earned = OrderService().create_order(order, current_user)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
@@ -153,14 +156,22 @@ async def create_order(
             body=(
                 f"Hi {current_user.name},\n\n"
                 f"Your order #{order_entity.id} has been placed successfully.\n"
-                f"Total: ${order_entity.total_price:.2f}\n\n"
-                "Thank you for shopping with Groceror!"
+                f"Total: ${order_entity.total_price:.2f}"
+                + (f" (saved ${order_entity.discount_amount:.2f})" if order_entity.discount_amount else "")
+                + (f"\nYou earned {points_earned} loyalty points!" if points_earned else "")
+                + "\n\nThank you for shopping with Groceror!"
             ),
         )
     except Exception:
         logger.warning("order_id=%s email notification could not be published", order_entity.id)
 
-    return OrderCreatedResponse(id=order_entity.id, status=order_entity.status)
+    return OrderCreatedResponse(
+        id=order_entity.id,
+        status=order_entity.status,
+        total_price=order_entity.total_price,
+        discount_amount=order_entity.discount_amount,
+        points_earned=points_earned,
+    )
 
 
 @order_apis.get("/store-orders", response_model=StoreOrdersResponse)

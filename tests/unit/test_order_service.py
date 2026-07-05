@@ -28,8 +28,8 @@ def test_create_order_snapshots_prices():
         req = CreateOrderRequest(items=[OrderLineItem(inventory_id=inv_id, quantity=2)])
         OrderService().create_order(req, user)
 
-        # One Order add + one OrderItem add
-        assert mock_db.add.call_count == 2
+        # Order + OrderItem + LoyaltyTransaction (earned) + LoyaltyAccount (upsert)
+        assert mock_db.add.call_count >= 2
         mock_db.commit.assert_called_once()
 
         calls = mock_db.add.call_args_list

@@ -19,6 +19,14 @@ from models.entity.cart_item_entity import CartItemEntity  # noqa: F401
 from models.entity.product_entity import Product  # noqa: F401
 from models.entity.promotion_entity import Promotion  # noqa: F401
 from models.entity.store_rating_entity import StoreRating  # noqa: F401
+from models.entity.coupon_entity import Coupon  # noqa: F401
+from models.entity.delivery_zone_entity import DeliveryZone  # noqa: F401
+from models.entity.loyalty_account_entity import LoyaltyAccount  # noqa: F401
+from models.entity.loyalty_transaction_entity import LoyaltyTransaction  # noqa: F401
+from models.entity.price_alert_entity import PriceAlert  # noqa: F401
+from models.entity.featured_store_entity import FeaturedStore  # noqa: F401
+from models.entity.dispute_entity import Dispute  # noqa: F401
+from models.entity.dispute_message_entity import DisputeMessage  # noqa: F401
 
 alembic_cfg = context.config
 

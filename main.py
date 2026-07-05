@@ -10,6 +10,12 @@ from fastapi.security import OAuth2PasswordBearer
 from loguru import logger
 
 from api.cart_api import cart_apis
+from api.coupon_api import coupon_apis
+from api.delivery_zone_api import delivery_zone_apis
+from api.dispute_api import dispute_apis
+from api.featured_store_api import featured_store_apis
+from api.loyalty_api import loyalty_apis
+from api.price_alert_api import price_alert_apis
 from api.product_api import product_apis
 from api.dashboard_api import dashboard_apis
 from api.google_login import google_login_apis
@@ -76,6 +82,12 @@ app.include_router(cart_apis)
 app.include_router(order_apis)
 app.include_router(dashboard_apis)
 app.include_router(product_apis)
+app.include_router(coupon_apis)
+app.include_router(delivery_zone_apis)
+app.include_router(dispute_apis)
+app.include_router(featured_store_apis)
+app.include_router(loyalty_apis)
+app.include_router(price_alert_apis)
 
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")

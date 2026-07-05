@@ -16,11 +16,16 @@ class OrderLineItem(BaseModel):
 class CreateOrderRequest(BaseModel):
     items: List[OrderLineItem] = Field(..., min_length=1)
     order_date: datetime = Field(default_factory=datetime.utcnow)
+    coupon_code: Optional[str] = None
+    points_to_redeem: int = Field(default=0, ge=0)
 
 
 class OrderCreatedResponse(BaseModel):
     id: UUID
     status: str
+    total_price: float
+    discount_amount: float
+    points_earned: int
 
 
 class OrderHistoryLineItem(BaseModel):
@@ -33,6 +38,9 @@ class OrderHistoryLineItem(BaseModel):
 class OrderHistoryItem(BaseModel):
     id: UUID
     total_price: float
+    discount_amount: float = 0.0
+    points_redeemed: int = 0
+    coupon_code: Optional[str] = None
     status: str
     items: List[OrderHistoryLineItem]
     order_date: datetime

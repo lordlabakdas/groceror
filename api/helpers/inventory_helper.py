@@ -133,6 +133,8 @@ class InventoryHelper:
             existing.quantity = quantity
         if price is not None:
             existing.price = price
+            from api.price_alert_api import _check_and_trigger
+            _check_and_trigger(inventory_id, price)
         existing.updated_at = datetime.utcnow()
         db_session.commit()
 

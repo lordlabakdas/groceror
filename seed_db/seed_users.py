@@ -7,7 +7,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from sqlmodel import Session
+from sqlmodel import Session, select
 from models.db import engine
 from models.entity.phone_verification import PhoneVerification
 from models.entity.user_entity import User
@@ -39,7 +39,18 @@ def seed():
     hashed = hash_password(plain_password)
 
     with Session(engine) as session:
+        inserted = 0
+        skipped = 0
         for data in USERS:
+            # Phone is the login key, so it decides whether the user exists.
+            existing = session.exec(
+                select(PhoneVerification).where(PhoneVerification.phone == data["phone"])
+            ).first()
+            if existing:
+                print(f"  ~ skipping (already exists): {data['name']} ({data['phone']})")
+                skipped += 1
+                continue
+
             phone_verification = PhoneVerification(
                 id=uuid.uuid4(),
                 phone=data["phone"],
@@ -59,9 +70,10 @@ def seed():
             )
             session.add(user)
             print(f"  + user: {user.name} ({user.email})")
+            inserted += 1
 
         session.commit()
-        print(f"\nInserted {len(USERS)} users.")
+        print(f"\nDone — inserted {inserted} users, skipped {skipped}.")
 
 
 if __name__ == "__main__":

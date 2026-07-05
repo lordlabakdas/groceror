@@ -10,6 +10,7 @@ from fastapi.security import OAuth2PasswordBearer
 from loguru import logger
 
 from api.cart_api import cart_apis
+from api.bulk_rule_api import bulk_rule_apis
 from api.coupon_api import coupon_apis
 from api.delivery_zone_api import delivery_zone_apis
 from api.dispute_api import dispute_apis
@@ -82,6 +83,7 @@ app.include_router(cart_apis)
 app.include_router(order_apis)
 app.include_router(dashboard_apis)
 app.include_router(product_apis)
+app.include_router(bulk_rule_apis)
 app.include_router(coupon_apis)
 app.include_router(delivery_zone_apis)
 app.include_router(dispute_apis)

@@ -27,6 +27,8 @@ from models.entity.price_alert_entity import PriceAlert  # noqa: F401
 from models.entity.featured_store_entity import FeaturedStore  # noqa: F401
 from models.entity.dispute_entity import Dispute  # noqa: F401
 from models.entity.dispute_message_entity import DisputeMessage  # noqa: F401
+from models.entity.bulk_rule_entity import BulkRule  # noqa: F401
+from models.entity.bulk_rule_item_entity import BulkRuleItem  # noqa: F401
 
 alembic_cfg = context.config
 

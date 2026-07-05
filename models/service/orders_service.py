@@ -51,9 +51,26 @@ class OrderService:
             raise ValueError("All order items must belong to the same store")
         store_id = store_ids.pop()
 
-        subtotal = round(
+        original_subtotal = round(
             sum(item.quantity * inventory_map[item.inventory_id].price for item in order.items), 2
         )
+
+        # --- Bulk pricing rules (BXGF / bundle) ---
+        from api.bulk_rule_api import apply_bulk_rules
+
+        class _LineItem:
+            def __init__(self, inventory_id, quantity, price):
+                self.inventory_id = inventory_id
+                self.quantity = quantity
+                self.price = price
+
+        line_items = [
+            _LineItem(item.inventory_id, item.quantity, inventory_map[item.inventory_id].price)
+            for item in order.items
+        ]
+        bulk_discount = apply_bulk_rules(store_id, line_items)
+        # Coupon and loyalty apply to post-bulk subtotal
+        subtotal = round(original_subtotal - bulk_discount, 2)
 
         # --- Coupon validation ---
         discount_amount = 0.0
@@ -98,8 +115,9 @@ class OrderService:
             points_redeemed = order.points_to_redeem
             loyalty_discount = round(points_redeemed / POINTS_PER_DOLLAR_REDEMPTION, 2)
 
-        total_discount = min(discount_amount + loyalty_discount, subtotal)
-        total_price = round(subtotal - total_discount, 2)
+        coupon_loyalty_discount = min(discount_amount + loyalty_discount, subtotal)
+        total_discount = round(bulk_discount + coupon_loyalty_discount, 2)
+        total_price = round(original_subtotal - total_discount, 2)
 
         try:
             order_id = uuid4()

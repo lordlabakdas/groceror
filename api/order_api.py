@@ -93,6 +93,12 @@ async def get_order_history(current_user: User = Depends(_get_user_profile)):
             )
         )
 
+    store_ids = list({o.store_id for o in orders if o.store_id})
+    store_name_map: dict = {}
+    if store_ids:
+        stores = db_session.exec(select(Store).where(Store.id.in_(store_ids))).all()
+        store_name_map = {s.id: s.name for s in stores}
+
     return OrderHistoryResponse(
         orders=[
             OrderHistoryItem(
@@ -101,6 +107,8 @@ async def get_order_history(current_user: User = Depends(_get_user_profile)):
                 status=o.status,
                 items=items_by_order[o.id],
                 order_date=o.order_date,
+                store_id=o.store_id,
+                store_name=store_name_map.get(o.store_id) if o.store_id else None,
             )
             for o in orders
         ]

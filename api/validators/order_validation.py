@@ -1,6 +1,6 @@
 # api/validators/order_validation.py
 from datetime import datetime
-from typing import List
+from typing import List, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -36,6 +36,8 @@ class OrderHistoryItem(BaseModel):
     status: str
     items: List[OrderHistoryLineItem]
     order_date: datetime
+    store_id: Optional[UUID] = None
+    store_name: Optional[str] = None
 
 
 class OrderHistoryResponse(BaseModel):

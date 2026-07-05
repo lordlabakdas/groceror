@@ -1,6 +1,6 @@
 import logging
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from enum import Enum
 from typing import Dict, List, Optional
 
@@ -8,6 +8,7 @@ from sqlmodel import select
 
 from models.db import db_session
 from models.entity.inventory_entity import Inventory, InventoryCategory
+from models.entity.inventory_expiry_entity import InventoryExpiry
 from models.entity.phone_verification import PhoneVerification
 from models.entity.store_entity import Store
 
@@ -65,7 +66,24 @@ class InventoryHelper:
         if items:
             query = query.where(Inventory.name.in_(items))
         results = db_session.exec(query).all()
-        return [inv.to_dict() for inv in results]
+        rows = [inv.to_dict() for inv in results]
+
+        # Attach the earliest upcoming expiry per item so the frontend can
+        # surface it (Myventory card badge, not just the dashboard panel).
+        inventory_ids = [inv.id for inv in results]
+        if inventory_ids:
+            expiry_rows = db_session.exec(
+                select(InventoryExpiry).where(
+                    InventoryExpiry.inventory_id.in_(inventory_ids),
+                    InventoryExpiry.expiry_date >= date.today(),
+                )
+            ).all()
+            earliest: Dict[uuid.UUID, date] = {}
+            for e in sorted(expiry_rows, key=lambda r: r.expiry_date):
+                earliest.setdefault(e.inventory_id, e.expiry_date)
+            for row in rows:
+                row["expiry_date"] = earliest.get(row["id"])
+        return rows
 
     def get_inventory_by_category(self, category: Enum) -> List[Dict]:
         store = self._require_store()

@@ -27,6 +27,7 @@ class StoreInventory(BaseModel):
     price: float
     store_id: UUID
     notes: Optional[str] = None
+    expiry_date: Optional[date] = None
 
 
 class StoreInventoryResponse(BaseModel):

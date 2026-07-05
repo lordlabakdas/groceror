@@ -16,4 +16,6 @@ __pycache__
 .ruff_cache
 firebaseconfig.json
 .config.yml
+.config.yml.bak
+.config.yml~
 venv-backup/

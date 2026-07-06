@@ -29,6 +29,8 @@ class StoreInventory(BaseModel):
     notes: Optional[str] = None
     expiry_date: Optional[date] = None
     sale_price: Optional[float] = None  # active promotion price, if any
+    flash_sale_price: Optional[float] = None
+    flash_sale_end_at: Optional[datetime] = None
 
 
 class StoreInventoryResponse(BaseModel):
@@ -58,6 +60,8 @@ class SearchResultItem(BaseModel):
     store_id: UUID
     store_name: str
     sale_price: Optional[float] = None
+    flash_sale_price: Optional[float] = None
+    flash_sale_end_at: Optional[datetime] = None
 
 
 class SetPromotionPayload(BaseModel):

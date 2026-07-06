@@ -131,6 +131,7 @@ class InventoryHelper:
         if not existing:
             raise ValueError("Inventory item not found")
         if quantity is not None:
+            prev_quantity = existing.quantity
             existing.quantity = quantity
             # Low-stock alert trigger
             threshold = db_session.exec(
@@ -140,6 +141,10 @@ class InventoryHelper:
                 threshold.is_triggered = True
                 threshold.triggered_at = datetime.utcnow()
                 db_session.add(threshold)
+            # Back-in-stock trigger
+            if prev_quantity == 0 and quantity > 0:
+                from api.back_in_stock_api import trigger_back_in_stock
+                trigger_back_in_stock(inventory_id)
         if price is not None:
             existing.price = price
             from api.price_alert_api import _check_and_trigger

@@ -30,6 +30,8 @@ from models.entity.product_review_entity import ProductReview  # noqa: F401
 from models.entity.scheduled_order_entity import ScheduledOrder  # noqa: F401
 from models.entity.scheduled_order_item_entity import ScheduledOrderItem  # noqa: F401
 from models.entity.store_follow_entity import StoreFollow  # noqa: F401
+from models.entity.flash_sale_entity import FlashSale  # noqa: F401
+from models.entity.back_in_stock_alert_entity import BackInStockAlert  # noqa: F401
 
 engine = create_engine(
     DBConfig.DB_URL, echo=True, connect_args={"options": "-c search_path=public"}, pool_pre_ping=True

@@ -23,6 +23,8 @@ from api.product_review_api import product_review_apis
 from api.scheduled_order_api import scheduled_order_apis
 from api.store_follow_api import store_follow_apis
 from api.stock_alert_api import stock_alert_apis
+from api.flash_sale_api import flash_sale_apis
+from api.back_in_stock_api import back_in_stock_apis
 from api.dashboard_api import dashboard_apis
 from api.google_login import google_login_apis
 from api.inventory_api import inventory_apis
@@ -100,6 +102,8 @@ app.include_router(product_review_apis)
 app.include_router(scheduled_order_apis)
 app.include_router(store_follow_apis)
 app.include_router(stock_alert_apis)
+app.include_router(flash_sale_apis)
+app.include_router(back_in_stock_apis)
 
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")

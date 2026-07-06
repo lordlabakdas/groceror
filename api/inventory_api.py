@@ -5,6 +5,7 @@ from typing import List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel
 from sqlmodel import select
 
 from api.helpers.inventory_helper import InventoryHelper
@@ -272,23 +273,24 @@ async def search_inventory(
     else:
         promo_map = {}
 
-    return SearchResponse(
-        query=q,
-        results=[
-            SearchResultItem(
-                id=item.id,
-                name=item.name,
-                category=item.category,
-                price=item.price,
-                quantity=item.quantity,
-                notes=item.notes,
-                store_id=item.store_id,
-                store_name=store_map[item.store_id],
-                sale_price=promo_map.get(item.id),
-            )
-            for item in visible
-        ],
-    )
+    from api.flash_sale_api import get_active_flash_sale
+    search_results = []
+    for item in visible:
+        fs = get_active_flash_sale(item.id)
+        search_results.append(SearchResultItem(
+            id=item.id,
+            name=item.name,
+            category=item.category,
+            price=item.price,
+            quantity=item.quantity,
+            notes=item.notes,
+            store_id=item.store_id,
+            store_name=store_map[item.store_id],
+            sale_price=promo_map.get(item.id),
+            flash_sale_price=fs.sale_price if fs else None,
+            flash_sale_end_at=fs.end_at if fs else None,
+        ))
+    return SearchResponse(query=q, results=search_results)
 
 
 @inventory_apis.get("/browse/{store_id}", response_model=StoreInventoryResponse)
@@ -299,6 +301,7 @@ async def browse_store_inventory(
     items = db_session.exec(
         select(Inventory).where(Inventory.store_id == store_id)
     ).all()
+    from api.flash_sale_api import get_active_flash_sale
     if items:
         promos = db_session.exec(
             select(Promotion).where(
@@ -310,12 +313,16 @@ async def browse_store_inventory(
         promo_map = {p.inventory_id: p.sale_price for p in promos}
     else:
         promo_map = {}
-    return StoreInventoryResponse(
-        inventory=[
-            StoreInventory(**item.to_dict(), sale_price=promo_map.get(item.id))
-            for item in items
-        ]
-    )
+    result = []
+    for item in items:
+        fs = get_active_flash_sale(item.id)
+        result.append(StoreInventory(
+            **item.to_dict(),
+            sale_price=promo_map.get(item.id),
+            flash_sale_price=fs.sale_price if fs else None,
+            flash_sale_end_at=fs.end_at if fs else None,
+        ))
+    return StoreInventoryResponse(inventory=result)
 
 
 @inventory_apis.delete("/delete-inventory", response_model=DeleteInventoryResponse)
@@ -335,3 +342,92 @@ async def delete_inventory(
         )
     else:
         return {"status": "success"}
+
+
+# ── Trending ────────────────────────────────────────────────────────────────
+
+from datetime import timedelta
+
+
+class TrendingItem(BaseModel):
+    inventory_id: UUID
+    inventory_name: str
+    category: str
+    price: float
+    store_id: UUID
+    store_name: str
+    sale_price: Optional[float]
+    flash_sale_price: Optional[float]
+    flash_sale_end_at: Optional[datetime]
+    order_count: int
+    is_verified_store: bool
+
+
+@inventory_apis.get("/trending", response_model=List[TrendingItem])
+def get_trending(limit: int = Query(default=10, le=50)):
+    from models.entity.order_item_entity import OrderItem
+    from models.entity.orders_entity import Order as OrderEntity
+    from api.flash_sale_api import get_active_flash_sale
+
+    cutoff = datetime.utcnow() - timedelta(days=7)
+
+    rows = db_session.exec(
+        select(OrderItem.inventory_id)
+        .join(OrderEntity, OrderItem.order_id == OrderEntity.id)
+        .where(OrderEntity.created_at >= cutoff)
+    ).all()
+
+    if not rows:
+        return []
+
+    from collections import Counter
+    counts = Counter(rows)
+    top_ids = [inv_id for inv_id, _ in counts.most_common(limit * 2)]
+
+    inventory_rows = db_session.exec(
+        select(Inventory).where(Inventory.id.in_(top_ids), Inventory.quantity > 0)
+    ).all()
+    inv_map = {inv.id: inv for inv in inventory_rows}
+
+    store_ids = {inv.store_id for inv in inventory_rows}
+    stores = db_session.exec(
+        select(Store).where(Store.id.in_(store_ids), Store.is_active == True)
+    ).all()
+    store_map = {s.id: s for s in stores}
+
+    today = date.today()
+    promos = db_session.exec(
+        select(Promotion).where(
+            Promotion.inventory_id.in_(top_ids),
+            Promotion.start_date <= today,
+            Promotion.end_date >= today,
+        )
+    ).all()
+    promo_map = {p.inventory_id: p.sale_price for p in promos}
+
+    result = []
+    for inv_id, count in counts.most_common(limit * 2):
+        inv = inv_map.get(inv_id)
+        if not inv:
+            continue
+        store = store_map.get(inv.store_id)
+        if not store:
+            continue
+        fs = get_active_flash_sale(inv.id)
+        result.append(TrendingItem(
+            inventory_id=inv.id,
+            inventory_name=inv.name,
+            category=inv.category,
+            price=inv.price,
+            store_id=inv.store_id,
+            store_name=store.name,
+            sale_price=promo_map.get(inv.id),
+            flash_sale_price=fs.sale_price if fs else None,
+            flash_sale_end_at=fs.end_at if fs else None,
+            order_count=count,
+            is_verified_store=store.is_verified,
+        ))
+        if len(result) >= limit:
+            break
+
+    return result

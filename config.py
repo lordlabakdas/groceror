@@ -80,6 +80,10 @@ class TwilioConfig(object):
 
 
 @dataclass
+class AdminConfig(object):
+    ADMIN_TOKEN: ClassVar[str] = _env("ADMIN_TOKEN", "groceror-admin-secret")
+
+
 class RabbitMQConfig(object):
     """RabbitMQ connection configuration"""
 

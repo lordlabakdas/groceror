@@ -107,7 +107,9 @@ def test_update_quantity_only_leaves_price_unchanged():
         mock_exec_store.first.return_value = mock_store
         mock_exec_item = MagicMock()
         mock_exec_item.first.return_value = mock_item
-        mock_db.exec.side_effect = [mock_exec_store, mock_exec_item]
+        mock_exec_threshold = MagicMock()
+        mock_exec_threshold.first.return_value = None  # no threshold set
+        mock_db.exec.side_effect = [mock_exec_store, mock_exec_item, mock_exec_threshold]
 
         from api.helpers.inventory_helper import InventoryHelper
         helper = InventoryHelper(user=MagicMock())

@@ -11,5 +11,8 @@ class StockThreshold(SQLModel, table=True):
     id: Optional[UUID] = Field(default_factory=uuid4, primary_key=True)
     inventory_id: UUID = Field(foreign_key="inventory.id", unique=True, index=True)
     threshold: int
+    is_triggered: bool = Field(default=False)
+    triggered_at: Optional[datetime] = None
+    acknowledged_at: Optional[datetime] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)

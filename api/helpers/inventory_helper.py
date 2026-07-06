@@ -12,6 +12,7 @@ from models.entity.inventory_expiry_entity import InventoryExpiry
 from models.entity.phone_verification import PhoneVerification
 from models.entity.promotion_entity import Promotion
 from models.entity.store_entity import Store
+from models.entity.stock_threshold_entity import StockThreshold
 
 logger = logging.getLogger()
 
@@ -131,6 +132,14 @@ class InventoryHelper:
             raise ValueError("Inventory item not found")
         if quantity is not None:
             existing.quantity = quantity
+            # Low-stock alert trigger
+            threshold = db_session.exec(
+                select(StockThreshold).where(StockThreshold.inventory_id == inventory_id)
+            ).first()
+            if threshold and not threshold.is_triggered and quantity <= threshold.threshold:
+                threshold.is_triggered = True
+                threshold.triggered_at = datetime.utcnow()
+                db_session.add(threshold)
         if price is not None:
             existing.price = price
             from api.price_alert_api import _check_and_trigger

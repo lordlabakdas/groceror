@@ -230,15 +230,24 @@ async def update_inventory(
 async def search_inventory(
     q: str = Query(min_length=2),
     category: Optional[InventoryCategory] = Query(default=None),
-    user: PhoneVerification = Depends(auth_required),
+    min_price: Optional[float] = Query(default=None, ge=0),
+    max_price: Optional[float] = Query(default=None, ge=0),
+    in_stock: Optional[bool] = Query(default=None),
+    store_id: Optional[UUID] = Query(default=None),
 ):
-    stmt = (
-        select(Inventory)
-        .where(Inventory.name.ilike(f"%{q}%"))
-        .where(Inventory.quantity > 0)
-    )
+    stmt = select(Inventory).where(Inventory.name.ilike(f"%{q}%"))
+
+    if in_stock is True or in_stock is None:
+        stmt = stmt.where(Inventory.quantity > 0)
     if category:
         stmt = stmt.where(Inventory.category == category)
+    if min_price is not None:
+        stmt = stmt.where(Inventory.price >= min_price)
+    if max_price is not None:
+        stmt = stmt.where(Inventory.price <= max_price)
+    if store_id is not None:
+        stmt = stmt.where(Inventory.store_id == store_id)
+
     items = db_session.exec(stmt).all()
 
     if not items:

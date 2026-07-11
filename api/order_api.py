@@ -21,9 +21,11 @@ from api.validators.order_validation import (
     VALID_STATUSES,
 )
 from engine import publisher
+from api.sse_bus import publish as sse_publish
 from models.db import db_session
 from models.entity.inventory_entity import Inventory
 from models.entity.order_item_entity import OrderItem
+from models.entity.orders_entity import Order as OrderEntity
 from models.entity.phone_verification import PhoneVerification
 from models.entity.store_entity import Store
 from models.entity.user_entity import User
@@ -165,6 +167,18 @@ async def create_order(
     except Exception:
         logger.warning("order_id=%s email notification could not be published", order_entity.id)
 
+    # Push SSE: notify the store owner that a new order arrived
+    if order_entity.store_id:
+        sse_publish(
+            str(order_entity.store_id),
+            "new_order",
+            {
+                "order_id": str(order_entity.id),
+                "total_price": order_entity.total_price,
+                "status": order_entity.status,
+            },
+        )
+
     return OrderCreatedResponse(
         id=order_entity.id,
         status=order_entity.status,
@@ -238,4 +252,14 @@ async def update_order_status(
         )
     except Exception:
         logger.warning("order_id=%s status updated but could not be published", order_id)
+
+    # Push SSE: notify the shopper their order status changed
+    order_row = db_session.exec(select(OrderEntity).where(OrderEntity.id == order_id)).first()
+    if order_row and order_row.user_id:
+        sse_publish(
+            str(order_row.user_id),
+            "order_status_update",
+            {"order_id": str(order_id), "status": payload.status},
+        )
+
     return UpdateOrderStatusResponse(message="Status updated", status=updated.status)

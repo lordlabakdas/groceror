@@ -141,6 +141,12 @@ class InventoryHelper:
                 threshold.is_triggered = True
                 threshold.triggered_at = datetime.utcnow()
                 db_session.add(threshold)
+                from api.sse_bus import publish as sse_publish
+                sse_publish(
+                    str(self.store.id),
+                    "low_stock_alert",
+                    {"inventory_id": str(inventory_id), "quantity": quantity, "threshold": threshold.threshold},
+                )
             # Back-in-stock trigger
             if prev_quantity == 0 and quantity > 0:
                 from api.back_in_stock_api import trigger_back_in_stock

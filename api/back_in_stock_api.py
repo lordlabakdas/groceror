@@ -62,6 +62,7 @@ def trigger_back_in_stock(inventory_id: UUID) -> None:
             BackInStockAlert.is_triggered == False,
         )
     ).all()
+    from api.sse_bus import publish as sse_publish
     now = datetime.utcnow()
     for alert in alerts:
         alert.is_triggered = True
@@ -69,6 +70,14 @@ def trigger_back_in_stock(inventory_id: UUID) -> None:
         db_session.add(alert)
     if alerts:
         db_session.commit()
+        inv = db_session.exec(select(Inventory).where(Inventory.id == inventory_id)).first()
+        inv_name = inv.name if inv else str(inventory_id)
+        for alert in alerts:
+            sse_publish(
+                str(alert.user_id),
+                "back_in_stock",
+                {"inventory_id": str(inventory_id), "inventory_name": inv_name},
+            )
 
 
 @back_in_stock_apis.post("/{inventory_id}", response_model=BackInStockResponse)

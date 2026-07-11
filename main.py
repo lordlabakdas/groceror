@@ -25,6 +25,7 @@ from api.store_follow_api import store_follow_apis
 from api.stock_alert_api import stock_alert_apis
 from api.flash_sale_api import flash_sale_apis
 from api.back_in_stock_api import back_in_stock_apis
+from api.sse_api import sse_apis
 from api.dashboard_api import dashboard_apis
 from api.google_login import google_login_apis
 from api.inventory_api import inventory_apis
@@ -38,6 +39,13 @@ logging.basicConfig(level=logging.INFO)
 logger.add(sys.stderr, format="{time} {level} {message}", level="INFO")
 
 app = FastAPI(debug=False)
+
+
+@app.on_event("startup")
+async def _register_event_loop():
+    import asyncio
+    from api.sse_bus import set_loop
+    set_loop(asyncio.get_event_loop())
 
 # Get port from environment variable (Heroku sets this)
 port = int(os.getenv("PORT", 8000))
@@ -104,6 +112,7 @@ app.include_router(store_follow_apis)
 app.include_router(stock_alert_apis)
 app.include_router(flash_sale_apis)
 app.include_router(back_in_stock_apis)
+app.include_router(sse_apis)
 
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")

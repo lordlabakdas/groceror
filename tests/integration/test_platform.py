@@ -103,11 +103,18 @@ class TestAuth:
         )
         assert r.status_code == 200
 
-    def test_set_store_profile_without_website(self, store_token):
+    def test_set_store_profile_without_website(self):
+        """Uses its own throwaway account — set-profile upserts by entity_id,
+        so reusing the shared store_token would rename the "Fresh Market"
+        store that TestStores/TestCart/TestOrders depend on."""
+        phone = f"+1555{_suffix}09"
+        _otp_and_verify(phone)
+        _register(phone, "store")
+        token = _login(phone)
         r = client.post(
             "/user/set-profile",
             json={"name": "No Website Store", "email": "nosite@groceror.test"},
-            headers=_headers(store_token),
+            headers=_headers(token),
         )
         assert r.status_code == 200
 

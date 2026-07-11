@@ -8,7 +8,7 @@ the small HTTP helper functions used by both fixtures and test methods.
 """
 import uuid
 
-from tests._client import client  # noqa: F401  re-exported for convenience
+from tests._client import client, get_test_otp  # noqa: F401  re-exported for convenience
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Per-run unique phone suffixes (avoids DB collisions between test runs)
@@ -25,10 +25,10 @@ PASSWORD    = "grocerorTest1!"
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _otp_and_verify(phone: str) -> None:
-    """Send OTP via legacy endpoint (returns OTP directly) and verify it."""
-    r = client.post("/user/otp", params={"phone": phone})
+    """Send OTP, read it back from the test DB, and verify it."""
+    r = client.post("/user/send-otp", json={"phone": phone})
     assert r.status_code == 200, r.text
-    otp = r.json()["otp"]
+    otp = get_test_otp(phone)
     r = client.post("/user/verify-otp", json={"phone": phone, "otp": otp})
     assert r.status_code == 200, r.text
 

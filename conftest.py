@@ -6,6 +6,7 @@ files are processed.  The SQLite patch runs at module-import time (not
 inside a hook) so that ``models.db.engine`` is already replaced when
 ``tests/conftest.py`` imports ``tests._client`` -> ``main``.
 """
+import os
 import threading
 
 # -----------------------------------------------------------------------
@@ -15,7 +16,14 @@ import threading
 
 import config as _config
 
-_SQLITE_URL = "sqlite:////tmp/test_groceror.db"
+_SQLITE_PATH = "/tmp/test_groceror.db"
+_SQLITE_URL = f"sqlite:///{_SQLITE_PATH}"
+
+# The file persists across runs; create_all() only creates missing tables,
+# it never alters existing ones, so a stale file's schema silently drifts
+# from current models. Start every session from a clean file instead.
+if os.path.exists(_SQLITE_PATH):
+    os.remove(_SQLITE_PATH)
 _config.DBConfig.DB_URL = _SQLITE_URL  # type: ignore[assignment]
 _config.JWTConfig.JWT_SECRET_KEY = "test-secret-key-padded-to-32-bytes!!"  # type: ignore[assignment]
 _config.TwilioConfig.ACCOUNT_SID = ""  # skip real SMS — send_sms falls back to stdout

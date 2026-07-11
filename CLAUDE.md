@@ -8,8 +8,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 make setup            # Create venv and install all dependencies (run once)
 make run              # Start FastAPI dev server on :8000 (override: make run PORT=9000)
 make test             # Full test suite
-make test-unit        # Unit tests only — no PostgreSQL required (uses SQLite)
-make test-integration # Integration tests — requires a running PostgreSQL instance
+make test-unit        # Unit tests only
+make test-integration # Integration tests — same in-process SQLite as unit tests, no PostgreSQL needed
 make lint             # Check style (ruff + black + isort) — read-only
 make format           # Auto-fix style
 ```
@@ -21,7 +21,7 @@ venv/bin/pytest tests/unit/test_dashboard.py::test_dashboard_response_empty -v
 
 ## Configuration
 
-All config lives in `.config.yml` (not `.env`). The `config.py` module reads it into `DBConfig`, `JWTConfig`, and `RabbitMQConfig` dataclasses. There is no `.env` file.
+All config lives in `.env` (python-dotenv), not `.config.yml` — the YAML config was replaced by env vars. `config.py` calls `load_dotenv(.env)` and reads `DB_*`, `JWT_*`, `TWILIO_*`, and `RABBITMQ_*` into `DBConfig`, `JWTConfig`, `TwilioConfig`, and `RabbitMQConfig` dataclasses (`DATABASE_URL` overrides the individual `DB_*` fields if set). A stray `.config.yml` may still exist locally from before the migration — it is not read by any code.
 
 ## Architecture
 
@@ -39,9 +39,11 @@ All config lives in `.config.yml` (not `.env`). The `config.py` module reads it 
 
 ## Testing Approach
 
-The root `conftest.py` patches `DBConfig.DB_URL` to a SQLite file (`/tmp/test_groceror.db`) **at import time**, before `main.py` is loaded. This means unit tests run without PostgreSQL. Integration tests in `tests/integration/` require a real PostgreSQL instance and a running app.
+The root `conftest.py` patches `DBConfig.DB_URL` to a SQLite file (`/tmp/test_groceror.db`) **at import time**, before `main.py` is loaded, and wipes that file at the start of every session (`create_all()` only creates missing tables, so a stale file's schema can drift from current models). This patch runs for the whole `tests/` tree — **both** `tests/unit/` and `tests/integration/` run against SQLite; neither needs a running PostgreSQL instance.
 
-The shared `TestClient` is defined in `tests/_client.py` and exposed via a session-scoped fixture in `tests/conftest.py`.
+`models/db.py` has an explicit "import all entity modules" block whose only purpose is to populate `SQLModel.metadata` before `create_all()` runs — any new entity module must be added there (in addition to wherever its service/router imports it) or its table silently won't exist in tests.
+
+The shared `TestClient` is defined in `tests/_client.py` and exposed via a session-scoped fixture in `tests/conftest.py`. It also exposes `get_test_otp(phone)`, which reads the OTP back from the SQLite `PhoneVerification` row — the old `/user/otp` endpoint that returned OTPs directly over HTTP was removed for security, so tests must go through `POST /user/send-otp` and then pull the code via this helper rather than the response body.
 
 ## Companion Microservices (RabbitMQ)
 

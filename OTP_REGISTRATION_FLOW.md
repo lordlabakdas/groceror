@@ -120,12 +120,14 @@ The `User` entity has been updated with the following new fields:
 
 ## Testing
 
-Use the provided test cases in `tests/test_apis.py` to verify the OTP functionality:
+Use the provided test cases in `tests/unit/test_apis.py` to verify the OTP functionality:
 
 ```bash
-pytest tests/test_apis.py -v
+venv/bin/pytest tests/unit/test_apis.py -v
 ```
+
+Integration tests (`tests/integration/test_platform.py`) exercise the full `send-otp` → `verify-otp` → `register` flow against a real request/response cycle. Since `/user/send-otp` no longer returns the OTP in the response body (see below), those tests read it back from the test DB via `tests.integration.helpers.get_test_otp(phone)` (re-exported from `tests/_client.py`) instead.
 
 ## Legacy Support
 
-The original `/user/otp` endpoint is still available for backward compatibility, but it's recommended to use the new structured endpoints for better error handling and validation. 
+The original `/user/otp` endpoint (which returned the OTP directly in the response, for testability) has been **removed** — it leaked OTPs over HTTP. Use `POST /user/send-otp` instead; it returns only `{"message": "..."}"`.

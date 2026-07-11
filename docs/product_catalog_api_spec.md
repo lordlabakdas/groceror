@@ -1,5 +1,11 @@
 # Product Catalog API — Spec
 
+> **2026-07-11 update:** implemented as specified — see `models/entity/product_entity.py`
+> and `api/product_api.py` (`GET/POST /products`, `GET /products/{product_id}`, matching
+> request/response shapes and `category`/`q` filters below). Frontend changes in the
+> "Frontend changes needed" section were not verified as part of this update — check the
+> frontend repo before assuming those landed.
+
 ## Background
 
 The frontend `/products` page currently renders a **hardcoded static catalog** of 17 items in `catalog.ts`. This spec replaces that with a live backend-driven catalog stored in the database.

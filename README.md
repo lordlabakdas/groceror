@@ -86,11 +86,12 @@ See the [groceror-users README](https://github.com/lordlabakdas/groceror-users) 
 
 [groceror-orders](https://github.com/lordlabakdas/groceror-orders) is a companion microservice that consumes order events published by groceror, stores them in MongoDB, and exposes analytics endpoints and a Grafana dashboard via Prometheus metrics.
 
-groceror publishes an event to RabbitMQ on this endpoint:
+groceror publishes an event to RabbitMQ on these endpoints:
 
 | Endpoint | Event |
 |---|---|
 | `POST /order/create-order` | `order_created` |
+| `PUT /order/{order_id}/status` | `order_status_updated` |
 
 See the [groceror-orders README](https://github.com/lordlabakdas/groceror-orders) for setup and running instructions.
 

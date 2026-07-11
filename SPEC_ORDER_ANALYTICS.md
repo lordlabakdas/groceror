@@ -4,6 +4,19 @@
 **Author:** Engineering  
 **Services affected:** `groceror` (producer), `groceror-orders` (consumer)
 
+> **2026-07-11 update:** the `groceror`-side changes in §5 (5.1–5.4) are implemented — see
+> `engine/publisher.py` and `api/order_api.py`. Confirmed in this repo:
+> - Publisher reads host/port/user/password from `RabbitMQConfig` (no more hardcoded `localhost`) — §5.1
+> - Thread-local persistent connection replaces per-call open/close — §5.1
+> - Every message includes `schema_version` (now `"2.0"`, not the `"1.0"` proposed here) — §5.1
+> - `order_api.py` publishes `order_entity.id` (the DB-assigned PK) as `order_id`, not just the request body — §5.2
+> - Publish failures are caught and logged (`order_id=... was saved but could not be published`) rather than silently swallowed — §5.3
+> - A DLX (`dlx` exchange) and per-queue `.dlq` queues are declared — §5.4
+>
+> G1 (`groceror-orders` item schema mismatch), G6 (analytics stubs), and all of §6
+> (`groceror-orders` consumer changes) live in the `groceror-orders` repo and were **not**
+> checked as part of this update — verify there before assuming they're resolved.
+
 ---
 
 ## 1. Background & Goal

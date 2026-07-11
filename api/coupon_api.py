@@ -109,6 +109,24 @@ async def deactivate_coupon(code: str, store: Store = Depends(_get_store)):
     db_session.commit()
 
 
+@coupon_apis.get("/available", response_model=List[CouponResponse])
+async def list_available_coupons(store_id: UUID, _: PhoneVerification = Depends(auth_required)):
+    """Shoppers: list active, non-expired coupons for a given store."""
+    today = date.today()
+    coupons = db_session.exec(
+        select(Coupon).where(
+            Coupon.store_id == store_id,
+            Coupon.is_active == True,
+        )
+    ).all()
+    return [
+        c for c in coupons
+        if (c.valid_from is None or c.valid_from <= today)
+        and (c.valid_until is None or c.valid_until >= today)
+        and (c.max_uses is None or c.uses_count < c.max_uses)
+    ]
+
+
 @coupon_apis.get("/{code}/validate", response_model=ValidateCouponResponse)
 async def validate_coupon(code: str, order_total: float = 0.0, _: PhoneVerification = Depends(auth_required)):
     coupon = db_session.exec(select(Coupon).where(Coupon.code == code.upper())).first()

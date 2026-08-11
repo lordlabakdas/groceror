@@ -1,0 +1,18 @@
+[run]
+omit =
+    venv/*
+    tests/*
+    alembic/*
+    seed_db/*
+    # Dead code: not imported/mounted anywhere (api/firebase_api.py is
+    # commented out in main.py; the other two have no importers at all).
+    api/firebase_api.py
+    models/service/inventory_service.py
+    models/service/cart_item_service.py
+    models/service/user_service.py
+    helpers/db_helpers.py
+
+[report]
+exclude_lines =
+    pragma: no cover
+    if __name__ == .__main__.:

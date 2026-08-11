@@ -246,13 +246,13 @@ from fastapi import Header
 from config import AdminConfig
 
 
-def _require_admin(x_admin_token: str = Header(...)):
+async def _require_admin(x_admin_token: str = Header(...)):
     if x_admin_token != AdminConfig.ADMIN_TOKEN:
         raise HTTPException(status_code=403, detail="Invalid admin token")
 
 
 @store_apis.post("/{store_id}/verify", status_code=200)
-def verify_store(store_id: UUID, _: None = Depends(_require_admin)):
+async def verify_store(store_id: UUID, _: None = Depends(_require_admin)):
     store = db_session.exec(select(Store).where(Store.id == store_id)).first()
     if not store:
         raise HTTPException(status_code=404, detail="Store not found")
@@ -263,7 +263,7 @@ def verify_store(store_id: UUID, _: None = Depends(_require_admin)):
 
 
 @store_apis.delete("/{store_id}/verify", status_code=200)
-def unverify_store(store_id: UUID, _: None = Depends(_require_admin)):
+async def unverify_store(store_id: UUID, _: None = Depends(_require_admin)):
     store = db_session.exec(select(Store).where(Store.id == store_id)).first()
     if not store:
         raise HTTPException(status_code=404, detail="Store not found")

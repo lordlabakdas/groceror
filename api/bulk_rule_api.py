@@ -18,7 +18,7 @@ from models.entity.store_entity import Store
 bulk_rule_apis = APIRouter(prefix="/bulk-rules", tags=["bulk-rules"])
 
 
-def _get_store(entity: PhoneVerification = Depends(auth_required)) -> Store:
+async def _get_store(entity: PhoneVerification = Depends(auth_required)) -> Store:
     if entity.entity_type != "store":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Store access only")
     store = db_session.exec(select(Store).where(Store.entity_id == entity.id)).first()
@@ -97,7 +97,7 @@ def _build_response(rule: BulkRule) -> BulkRuleResponse:
 # ── Endpoints ────────────────────────────────────────────────────────────────
 
 @bulk_rule_apis.post("/bxgf", response_model=BulkRuleResponse)
-def create_bxgf(payload: CreateBXGFPayload, store: Store = Depends(_get_store)):
+async def create_bxgf(payload: CreateBXGFPayload, store: Store = Depends(_get_store)):
     inv = db_session.exec(
         select(Inventory).where(Inventory.id == payload.inventory_id, Inventory.store_id == store.id)
     ).first()
@@ -119,7 +119,7 @@ def create_bxgf(payload: CreateBXGFPayload, store: Store = Depends(_get_store)):
 
 
 @bulk_rule_apis.post("/bundle", response_model=BulkRuleResponse)
-def create_bundle(payload: CreateBundlePayload, store: Store = Depends(_get_store)):
+async def create_bundle(payload: CreateBundlePayload, store: Store = Depends(_get_store)):
     for iid in payload.inventory_ids:
         inv = db_session.exec(
             select(Inventory).where(Inventory.id == iid, Inventory.store_id == store.id)
@@ -146,7 +146,7 @@ def create_bundle(payload: CreateBundlePayload, store: Store = Depends(_get_stor
 
 
 @bulk_rule_apis.get("", response_model=List[BulkRuleResponse])
-def list_my_rules(store: Store = Depends(_get_store)):
+async def list_my_rules(store: Store = Depends(_get_store)):
     rules = db_session.exec(
         select(BulkRule).where(BulkRule.store_id == store.id, BulkRule.is_active == True)
     ).all()
@@ -154,7 +154,7 @@ def list_my_rules(store: Store = Depends(_get_store)):
 
 
 @bulk_rule_apis.get("/store/{store_id}", response_model=List[BulkRuleResponse])
-def list_store_rules(store_id: UUID):
+async def list_store_rules(store_id: UUID):
     rules = db_session.exec(
         select(BulkRule).where(BulkRule.store_id == store_id, BulkRule.is_active == True)
     ).all()
@@ -162,7 +162,7 @@ def list_store_rules(store_id: UUID):
 
 
 @bulk_rule_apis.delete("/{rule_id}", status_code=204)
-def deactivate_rule(rule_id: UUID, store: Store = Depends(_get_store)):
+async def deactivate_rule(rule_id: UUID, store: Store = Depends(_get_store)):
     rule = db_session.exec(
         select(BulkRule).where(BulkRule.id == rule_id, BulkRule.store_id == store.id)
     ).first()

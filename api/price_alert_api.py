@@ -16,7 +16,7 @@ from models.entity.user_entity import User
 price_alert_apis = APIRouter(prefix="/price-alerts", tags=["price-alerts"])
 
 
-def _get_user(entity: PhoneVerification = Depends(auth_required)) -> User:
+async def _get_user(entity: PhoneVerification = Depends(auth_required)) -> User:
     user = db_session.exec(select(User).where(User.entity_id == entity.id)).first()
     if not user:
         raise HTTPException(status_code=400, detail="User profile not set")
@@ -57,7 +57,7 @@ def _check_and_trigger(inventory_id: UUID, new_price: float) -> None:
 
 
 @price_alert_apis.post("", response_model=PriceAlertResponse)
-def create_price_alert(
+async def create_price_alert(
     payload: CreatePriceAlertPayload,
     current_user: User = Depends(_get_user),
 ):
@@ -102,7 +102,7 @@ def create_price_alert(
 
 
 @price_alert_apis.get("", response_model=List[PriceAlertResponse])
-def list_price_alerts(current_user: User = Depends(_get_user)):
+async def list_price_alerts(current_user: User = Depends(_get_user)):
     alerts = db_session.exec(
         select(PriceAlert).where(
             PriceAlert.user_id == current_user.id,
@@ -133,7 +133,7 @@ def list_price_alerts(current_user: User = Depends(_get_user)):
 
 
 @price_alert_apis.delete("/{alert_id}", status_code=204)
-def delete_price_alert(alert_id: UUID, current_user: User = Depends(_get_user)):
+async def delete_price_alert(alert_id: UUID, current_user: User = Depends(_get_user)):
     alert = db_session.exec(
         select(PriceAlert).where(
             PriceAlert.id == alert_id,

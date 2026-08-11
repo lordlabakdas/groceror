@@ -17,7 +17,7 @@ from models.entity.user_entity import User
 product_review_apis = APIRouter(prefix="/product-reviews", tags=["product-reviews"])
 
 
-def _get_user(entity: PhoneVerification = Depends(auth_required)) -> User:
+async def _get_user(entity: PhoneVerification = Depends(auth_required)) -> User:
     user = db_session.exec(select(User).where(User.entity_id == entity.id)).first()
     if not user:
         raise HTTPException(status_code=400, detail="User profile not set")
@@ -60,7 +60,7 @@ def _to_response(r: ProductReview) -> ReviewResponse:
 
 
 @product_review_apis.post("", response_model=ReviewResponse)
-def submit_review(payload: SubmitReviewPayload, user: User = Depends(_get_user)):
+async def submit_review(payload: SubmitReviewPayload, user: User = Depends(_get_user)):
     inv = db_session.exec(select(Inventory).where(Inventory.id == payload.inventory_id)).first()
     if not inv:
         raise HTTPException(status_code=404, detail="Item not found")
@@ -95,7 +95,7 @@ def submit_review(payload: SubmitReviewPayload, user: User = Depends(_get_user))
 
 
 @product_review_apis.get("/{inventory_id}", response_model=ReviewSummaryResponse)
-def get_reviews(inventory_id: UUID, entity: Optional[PhoneVerification] = Depends(auth_required)):
+async def get_reviews(inventory_id: UUID, entity: Optional[PhoneVerification] = Depends(auth_required)):
     reviews = db_session.exec(
         select(ProductReview)
         .where(ProductReview.inventory_id == inventory_id)
@@ -121,7 +121,7 @@ def get_reviews(inventory_id: UUID, entity: Optional[PhoneVerification] = Depend
 
 
 @product_review_apis.delete("/{review_id}", status_code=204)
-def delete_review(review_id: UUID, user: User = Depends(_get_user)):
+async def delete_review(review_id: UUID, user: User = Depends(_get_user)):
     review = db_session.exec(
         select(ProductReview).where(
             ProductReview.id == review_id,

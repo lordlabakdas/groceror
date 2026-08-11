@@ -93,6 +93,15 @@ app.include_router(user_apis)
 # app.include_router(firebase_api, prefix="/firebase")
 app.include_router(google_login_apis)
 app.include_router(inventory_apis)
+# store_follow_apis and featured_store_apis must be registered before
+# store_apis: they define static routes (GET /stores/following,
+# PUT|DELETE /stores/feature, GET /stores/featured) that store_apis's
+# dynamic GET|PUT|DELETE /stores/{store_id} would otherwise shadow
+# (Starlette matches routes in registration order, and "following" /
+# "feature" / "featured" are syntactically valid — if semantically wrong —
+# store_ids).
+app.include_router(store_follow_apis)
+app.include_router(featured_store_apis)
 app.include_router(store_apis)
 app.include_router(cart_apis)
 app.include_router(order_apis)
@@ -102,13 +111,11 @@ app.include_router(bulk_rule_apis)
 app.include_router(coupon_apis)
 app.include_router(delivery_zone_apis)
 app.include_router(dispute_apis)
-app.include_router(featured_store_apis)
 app.include_router(loyalty_apis)
 app.include_router(price_alert_apis)
 app.include_router(wishlist_apis)
 app.include_router(product_review_apis)
 app.include_router(scheduled_order_apis)
-app.include_router(store_follow_apis)
 app.include_router(stock_alert_apis)
 app.include_router(flash_sale_apis)
 app.include_router(back_in_stock_apis)

@@ -42,8 +42,14 @@ engine = create_engine(
 _local = threading.local()
 
 
-def _get_session() -> Session:
-    """Return the SQLModel Session for the current thread, creating one if needed."""
+def _get_session() -> Session:  # pragma: no cover
+    """Return the SQLModel Session for the current thread, creating one if needed.
+
+    Unreachable under the test suite: conftest.py replaces this function
+    (module attribute ``models.db._get_session``) with a SQLite-backed
+    version before any test runs, so this body only ever executes in a real
+    Postgres deployment.
+    """
     if not getattr(_local, "session", None):
         _local.session = Session(engine)
     return _local.session
@@ -73,8 +79,12 @@ class _ThreadLocalSessionProxy:
 db_session = _ThreadLocalSessionProxy()
 
 
-def get_session():
-    """FastAPI dependency that yields a per-request session."""
+def get_session():  # pragma: no cover
+    """FastAPI dependency that yields a per-request session.
+
+    Unused: every route calls ``db_session`` directly rather than taking
+    this as a ``Depends()`` (see CLAUDE.md). Kept for potential future use.
+    """
     session = _get_session()
     try:
         yield session

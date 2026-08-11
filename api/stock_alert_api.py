@@ -16,7 +16,7 @@ from models.entity.store_entity import Store
 stock_alert_apis = APIRouter(prefix="/stock-alerts", tags=["stock-alerts"])
 
 
-def _get_store(entity: PhoneVerification = Depends(auth_required)) -> Store:
+async def _get_store(entity: PhoneVerification = Depends(auth_required)) -> Store:
     if entity.entity_type != "store":
         raise HTTPException(status_code=403, detail="Store account required")
     store = db_session.exec(select(Store).where(Store.entity_id == entity.id)).first()
@@ -53,7 +53,7 @@ def _enrich(st: StockThreshold) -> Optional[StockAlertResponse]:
 
 
 @stock_alert_apis.get("", response_model=List[StockAlertResponse])
-def list_stock_alerts(store: Store = Depends(_get_store)):
+async def list_stock_alerts(store: Store = Depends(_get_store)):
     inv_ids = db_session.exec(
         select(Inventory.id).where(Inventory.store_id == store.id)
     ).all()
@@ -67,7 +67,7 @@ def list_stock_alerts(store: Store = Depends(_get_store)):
 
 
 @stock_alert_apis.post("/{alert_id}/acknowledge", response_model=StockAlertResponse)
-def acknowledge_alert(alert_id: UUID, store: Store = Depends(_get_store)):
+async def acknowledge_alert(alert_id: UUID, store: Store = Depends(_get_store)):
     st = db_session.exec(select(StockThreshold).where(StockThreshold.id == alert_id)).first()
     if not st:
         raise HTTPException(status_code=404, detail="Alert not found")

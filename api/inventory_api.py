@@ -364,7 +364,7 @@ class TrendingItem(BaseModel):
 
 
 @inventory_apis.get("/trending", response_model=List[TrendingItem])
-def get_trending(limit: int = Query(default=10, le=50)):
+async def get_trending(limit: int = Query(default=10, le=50)):
     from models.entity.order_item_entity import OrderItem
     from models.entity.orders_entity import Order as OrderEntity
     from api.flash_sale_api import get_active_flash_sale

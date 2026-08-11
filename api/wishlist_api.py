@@ -18,7 +18,7 @@ from models.entity.wishlist_item_entity import WishlistItem
 wishlist_apis = APIRouter(prefix="/wishlist", tags=["wishlist"])
 
 
-def _get_user(entity: PhoneVerification = Depends(auth_required)) -> User:
+async def _get_user(entity: PhoneVerification = Depends(auth_required)) -> User:
     user = db_session.exec(select(User).where(User.entity_id == entity.id)).first()
     if not user:
         raise HTTPException(status_code=400, detail="User profile not set")
@@ -74,7 +74,7 @@ def _enrich(item: WishlistItem) -> Optional[WishlistItemResponse]:
 
 
 @wishlist_apis.post("", response_model=WishlistItemResponse)
-def add_to_wishlist(payload: AddWishlistPayload, user: User = Depends(_get_user)):
+async def add_to_wishlist(payload: AddWishlistPayload, user: User = Depends(_get_user)):
     inv = db_session.exec(select(Inventory).where(Inventory.id == payload.inventory_id)).first()
     if not inv:
         raise HTTPException(status_code=404, detail="Item not found")
@@ -96,7 +96,7 @@ def add_to_wishlist(payload: AddWishlistPayload, user: User = Depends(_get_user)
 
 
 @wishlist_apis.get("", response_model=List[WishlistItemResponse])
-def list_wishlist(user: User = Depends(_get_user)):
+async def list_wishlist(user: User = Depends(_get_user)):
     items = db_session.exec(
         select(WishlistItem)
         .where(WishlistItem.user_id == user.id)
@@ -106,7 +106,7 @@ def list_wishlist(user: User = Depends(_get_user)):
 
 
 @wishlist_apis.get("/check/{inventory_id}", response_model=bool)
-def check_wishlist(inventory_id: UUID, user: User = Depends(_get_user)):
+async def check_wishlist(inventory_id: UUID, user: User = Depends(_get_user)):
     item = db_session.exec(
         select(WishlistItem).where(
             WishlistItem.user_id == user.id,
@@ -117,7 +117,7 @@ def check_wishlist(inventory_id: UUID, user: User = Depends(_get_user)):
 
 
 @wishlist_apis.delete("/{inventory_id}", status_code=204)
-def remove_from_wishlist(inventory_id: UUID, user: User = Depends(_get_user)):
+async def remove_from_wishlist(inventory_id: UUID, user: User = Depends(_get_user)):
     item = db_session.exec(
         select(WishlistItem).where(
             WishlistItem.user_id == user.id,

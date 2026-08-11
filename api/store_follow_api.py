@@ -16,7 +16,7 @@ from models.entity.user_entity import User
 store_follow_apis = APIRouter(tags=["store-follow"])
 
 
-def _get_user(entity: PhoneVerification = Depends(auth_required)) -> User:
+async def _get_user(entity: PhoneVerification = Depends(auth_required)) -> User:
     user = db_session.exec(select(User).where(User.entity_id == entity.id)).first()
     if not user:
         raise HTTPException(status_code=400, detail="User profile not set")
@@ -44,7 +44,7 @@ def _follower_count(store_id: UUID) -> int:
 
 
 @store_follow_apis.post("/stores/{store_id}/follow", response_model=FollowedStoreResponse)
-def follow_store(store_id: UUID, user: User = Depends(_get_user)):
+async def follow_store(store_id: UUID, user: User = Depends(_get_user)):
     store = db_session.exec(select(Store).where(Store.id == store_id)).first()
     if not store:
         raise HTTPException(status_code=404, detail="Store not found")
@@ -73,7 +73,7 @@ def follow_store(store_id: UUID, user: User = Depends(_get_user)):
 
 
 @store_follow_apis.delete("/stores/{store_id}/follow", status_code=204)
-def unfollow_store(store_id: UUID, user: User = Depends(_get_user)):
+async def unfollow_store(store_id: UUID, user: User = Depends(_get_user)):
     follow = db_session.exec(
         select(StoreFollow).where(
             StoreFollow.user_id == user.id,
@@ -86,7 +86,7 @@ def unfollow_store(store_id: UUID, user: User = Depends(_get_user)):
 
 
 @store_follow_apis.get("/stores/following", response_model=List[FollowedStoreResponse])
-def list_following(user: User = Depends(_get_user)):
+async def list_following(user: User = Depends(_get_user)):
     follows = db_session.exec(
         select(StoreFollow)
         .where(StoreFollow.user_id == user.id)
@@ -105,7 +105,7 @@ def list_following(user: User = Depends(_get_user)):
 
 
 @store_follow_apis.get("/stores/{store_id}/followers", response_model=StoreFollowerCountResponse)
-def get_follower_count(store_id: UUID, entity: Optional[PhoneVerification] = Depends(auth_required)):
+async def get_follower_count(store_id: UUID, entity: Optional[PhoneVerification] = Depends(auth_required)):
     store = db_session.exec(select(Store).where(Store.id == store_id)).first()
     if not store:
         raise HTTPException(status_code=404, detail="Store not found")

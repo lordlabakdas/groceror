@@ -20,13 +20,13 @@ dispute_apis = APIRouter(prefix="/disputes", tags=["disputes"])
 DISPUTE_REASONS = {"wrong_item", "missing_item", "quality", "damaged", "not_delivered", "other"}
 
 
-def _get_user_optional(entity: PhoneVerification = Depends(auth_required)) -> Optional[User]:
+async def _get_user_optional(entity: PhoneVerification = Depends(auth_required)) -> Optional[User]:
     if entity.entity_type != "user":
         return None
     return db_session.exec(select(User).where(User.entity_id == entity.id)).first()
 
 
-def _get_store_optional(entity: PhoneVerification = Depends(auth_required)) -> Optional[Store]:
+async def _get_store_optional(entity: PhoneVerification = Depends(auth_required)) -> Optional[Store]:
     if entity.entity_type != "store":
         return None
     return db_session.exec(select(Store).where(Store.entity_id == entity.id)).first()
@@ -67,7 +67,7 @@ class DisputeOut(BaseModel):
 
 
 @dispute_apis.post("", response_model=DisputeOut)
-def open_dispute(
+async def open_dispute(
     payload: OpenDisputePayload,
     entity: PhoneVerification = Depends(auth_required),
 ):
@@ -110,7 +110,7 @@ def open_dispute(
 
 
 @dispute_apis.get("", response_model=List[DisputeOut])
-def list_disputes(entity: PhoneVerification = Depends(auth_required)):
+async def list_disputes(entity: PhoneVerification = Depends(auth_required)):
     if entity.entity_type == "user":
         user = db_session.exec(select(User).where(User.entity_id == entity.id)).first()
         if not user:
@@ -134,13 +134,13 @@ def list_disputes(entity: PhoneVerification = Depends(auth_required)):
 
 
 @dispute_apis.get("/{dispute_id}", response_model=DisputeOut)
-def get_dispute(dispute_id: UUID, entity: PhoneVerification = Depends(auth_required)):
+async def get_dispute(dispute_id: UUID, entity: PhoneVerification = Depends(auth_required)):
     dispute = _get_authorized_dispute(dispute_id, entity)
     return _dispute_out(dispute)
 
 
 @dispute_apis.post("/{dispute_id}/messages", response_model=DisputeOut)
-def add_message(
+async def add_message(
     dispute_id: UUID,
     payload: AddMessagePayload,
     entity: PhoneVerification = Depends(auth_required),
@@ -167,7 +167,7 @@ def add_message(
 
 
 @dispute_apis.put("/{dispute_id}/resolve", response_model=DisputeOut)
-def resolve_dispute(
+async def resolve_dispute(
     dispute_id: UUID,
     payload: ResolveDisputePayload,
     entity: PhoneVerification = Depends(auth_required),
@@ -197,7 +197,7 @@ def resolve_dispute(
 
 
 @dispute_apis.put("/{dispute_id}/close", response_model=DisputeOut)
-def close_dispute(dispute_id: UUID, entity: PhoneVerification = Depends(auth_required)):
+async def close_dispute(dispute_id: UUID, entity: PhoneVerification = Depends(auth_required)):
     if entity.entity_type != "user":
         raise HTTPException(status_code=403, detail="Shopper access only")
 

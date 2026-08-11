@@ -15,7 +15,7 @@ from models.entity.store_entity import Store
 featured_store_apis = APIRouter(tags=["featured-stores"])
 
 
-def _get_store(entity: PhoneVerification = Depends(auth_required)) -> Store:
+async def _get_store(entity: PhoneVerification = Depends(auth_required)) -> Store:
     if entity.entity_type != "store":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Store access only")
     store = db_session.exec(select(Store).where(Store.entity_id == entity.id)).first()
@@ -53,7 +53,7 @@ def _is_currently_active(fs: FeaturedStore) -> bool:
 
 
 @featured_store_apis.put("/stores/feature", response_model=FeaturedStoreResponse)
-def set_featured(payload: SetFeaturedPayload, store: Store = Depends(_get_store)):
+async def set_featured(payload: SetFeaturedPayload, store: Store = Depends(_get_store)):
     existing = db_session.exec(
         select(FeaturedStore).where(FeaturedStore.store_id == store.id)
     ).first()
@@ -92,7 +92,7 @@ def set_featured(payload: SetFeaturedPayload, store: Store = Depends(_get_store)
 
 
 @featured_store_apis.delete("/stores/feature", status_code=204)
-def remove_featured(store: Store = Depends(_get_store)):
+async def remove_featured(store: Store = Depends(_get_store)):
     existing = db_session.exec(
         select(FeaturedStore).where(FeaturedStore.store_id == store.id)
     ).first()
@@ -103,7 +103,7 @@ def remove_featured(store: Store = Depends(_get_store)):
 
 
 @featured_store_apis.get("/stores/feature/me", response_model=Optional[FeaturedStoreResponse])
-def get_my_featured(store: Store = Depends(_get_store)):
+async def get_my_featured(store: Store = Depends(_get_store)):
     fs = db_session.exec(
         select(FeaturedStore).where(FeaturedStore.store_id == store.id)
     ).first()
@@ -121,7 +121,7 @@ def get_my_featured(store: Store = Depends(_get_store)):
 
 
 @featured_store_apis.get("/stores/featured", response_model=List[FeaturedStoreResponse])
-def list_featured_stores():
+async def list_featured_stores():
     rows = db_session.exec(
         select(FeaturedStore, Store)
         .join(Store, FeaturedStore.store_id == Store.id)

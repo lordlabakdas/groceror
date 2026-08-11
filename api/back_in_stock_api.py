@@ -17,7 +17,7 @@ from models.entity.user_entity import User
 back_in_stock_apis = APIRouter(prefix="/back-in-stock", tags=["back-in-stock"])
 
 
-def _get_user(entity: PhoneVerification = Depends(auth_required)) -> User:
+async def _get_user(entity: PhoneVerification = Depends(auth_required)) -> User:
     user = db_session.exec(select(User).where(User.entity_id == entity.id)).first()
     if not user:
         raise HTTPException(status_code=400, detail="User profile not set")
@@ -81,7 +81,7 @@ def trigger_back_in_stock(inventory_id: UUID) -> None:
 
 
 @back_in_stock_apis.post("/{inventory_id}", response_model=BackInStockResponse)
-def subscribe(inventory_id: UUID, user: User = Depends(_get_user)):
+async def subscribe(inventory_id: UUID, user: User = Depends(_get_user)):
     inv = db_session.exec(select(Inventory).where(Inventory.id == inventory_id)).first()
     if not inv:
         raise HTTPException(status_code=404, detail="Item not found")
@@ -105,7 +105,7 @@ def subscribe(inventory_id: UUID, user: User = Depends(_get_user)):
 
 
 @back_in_stock_apis.get("", response_model=List[BackInStockResponse])
-def list_alerts(user: User = Depends(_get_user)):
+async def list_alerts(user: User = Depends(_get_user)):
     alerts = db_session.exec(
         select(BackInStockAlert)
         .where(BackInStockAlert.user_id == user.id)
@@ -115,7 +115,7 @@ def list_alerts(user: User = Depends(_get_user)):
 
 
 @back_in_stock_apis.delete("/{inventory_id}", status_code=204)
-def unsubscribe(inventory_id: UUID, user: User = Depends(_get_user)):
+async def unsubscribe(inventory_id: UUID, user: User = Depends(_get_user)):
     alert = db_session.exec(
         select(BackInStockAlert).where(
             BackInStockAlert.user_id == user.id,

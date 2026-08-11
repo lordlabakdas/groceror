@@ -23,7 +23,7 @@ _svc = OrderService()
 FREQ_DAYS = {"weekly": 7, "biweekly": 14, "monthly": 30}
 
 
-def _get_user(entity: PhoneVerification = Depends(auth_required)) -> User:
+async def _get_user(entity: PhoneVerification = Depends(auth_required)) -> User:
     user = db_session.exec(select(User).where(User.entity_id == entity.id)).first()
     if not user:
         raise HTTPException(status_code=400, detail="User profile not set")
@@ -106,7 +106,7 @@ def _execute(so: ScheduledOrder, user: User) -> None:
 
 
 @scheduled_order_apis.post("", response_model=ScheduledOrderResponse)
-def create_scheduled_order(payload: CreateScheduledOrderPayload, user: User = Depends(_get_user)):
+async def create_scheduled_order(payload: CreateScheduledOrderPayload, user: User = Depends(_get_user)):
     if payload.frequency not in FREQ_DAYS:
         raise HTTPException(status_code=400, detail="frequency must be weekly, biweekly, or monthly")
     if not payload.items:
@@ -153,7 +153,7 @@ def create_scheduled_order(payload: CreateScheduledOrderPayload, user: User = De
 
 
 @scheduled_order_apis.get("", response_model=List[ScheduledOrderResponse])
-def list_scheduled_orders(user: User = Depends(_get_user)):
+async def list_scheduled_orders(user: User = Depends(_get_user)):
     orders = db_session.exec(
         select(ScheduledOrder)
         .where(ScheduledOrder.user_id == user.id)
@@ -176,7 +176,7 @@ def list_scheduled_orders(user: User = Depends(_get_user)):
 
 
 @scheduled_order_apis.put("/{order_id}", response_model=ScheduledOrderResponse)
-def update_scheduled_order(
+async def update_scheduled_order(
     order_id: UUID,
     payload: UpdateScheduledOrderPayload,
     user: User = Depends(_get_user),
@@ -205,7 +205,7 @@ def update_scheduled_order(
 
 
 @scheduled_order_apis.post("/{order_id}/run-now", response_model=ScheduledOrderResponse)
-def run_now(order_id: UUID, user: User = Depends(_get_user)):
+async def run_now(order_id: UUID, user: User = Depends(_get_user)):
     so = db_session.exec(
         select(ScheduledOrder).where(
             ScheduledOrder.id == order_id,
@@ -221,7 +221,7 @@ def run_now(order_id: UUID, user: User = Depends(_get_user)):
 
 
 @scheduled_order_apis.delete("/{order_id}", status_code=204)
-def delete_scheduled_order(order_id: UUID, user: User = Depends(_get_user)):
+async def delete_scheduled_order(order_id: UUID, user: User = Depends(_get_user)):
     so = db_session.exec(
         select(ScheduledOrder).where(
             ScheduledOrder.id == order_id,

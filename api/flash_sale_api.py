@@ -16,7 +16,7 @@ from models.entity.store_entity import Store
 flash_sale_apis = APIRouter(prefix="/flash-sales", tags=["flash-sales"])
 
 
-def _get_store(entity: PhoneVerification = Depends(auth_required)) -> Store:
+async def _get_store(entity: PhoneVerification = Depends(auth_required)) -> Store:
     if entity.entity_type != "store":
         raise HTTPException(status_code=403, detail="Store account required")
     store = db_session.exec(select(Store).where(Store.entity_id == entity.id)).first()
@@ -84,7 +84,7 @@ def get_active_flash_sale(inventory_id: UUID) -> Optional[FlashSale]:
 
 
 @flash_sale_apis.post("", response_model=FlashSaleResponse)
-def create_flash_sale(payload: CreateFlashSalePayload, store: Store = Depends(_get_store)):
+async def create_flash_sale(payload: CreateFlashSalePayload, store: Store = Depends(_get_store)):
     if payload.end_at <= payload.start_at:
         raise HTTPException(status_code=400, detail="end_at must be after start_at")
     if payload.end_at <= datetime.utcnow():
@@ -112,7 +112,7 @@ def create_flash_sale(payload: CreateFlashSalePayload, store: Store = Depends(_g
 
 
 @flash_sale_apis.get("/store", response_model=List[FlashSaleResponse])
-def list_store_flash_sales(store: Store = Depends(_get_store)):
+async def list_store_flash_sales(store: Store = Depends(_get_store)):
     sales = db_session.exec(
         select(FlashSale)
         .where(FlashSale.store_id == store.id)
@@ -122,7 +122,7 @@ def list_store_flash_sales(store: Store = Depends(_get_store)):
 
 
 @flash_sale_apis.get("/active", response_model=List[FlashSaleResponse])
-def list_active_flash_sales():
+async def list_active_flash_sales():
     now = datetime.utcnow()
     sales = db_session.exec(
         select(FlashSale).where(
@@ -135,7 +135,7 @@ def list_active_flash_sales():
 
 
 @flash_sale_apis.delete("/{sale_id}", status_code=204)
-def cancel_flash_sale(sale_id: UUID, store: Store = Depends(_get_store)):
+async def cancel_flash_sale(sale_id: UUID, store: Store = Depends(_get_store)):
     fs = db_session.exec(
         select(FlashSale).where(FlashSale.id == sale_id, FlashSale.store_id == store.id)
     ).first()

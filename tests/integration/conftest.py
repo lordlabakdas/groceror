@@ -57,7 +57,21 @@ def user_profile(user_token):
 
 @pytest.fixture(scope="module")
 def store_id(store_token):
-    """Create a store via the API and return its id."""
+    """Create a store via the API and return its id.
+
+    Idempotent by entity: POST /stores/ has no upsert, and this fixture is
+    module-scoped, so every test *file* that requests it would otherwise
+    create another Store row for the same shared STORE_PHONE account. Since
+    `_get_store()`-style "my store" resolution elsewhere in the app does
+    `.first()` with no ordering, a second row makes that resolution
+    order-dependent across files. Reuse the existing store if one is
+    already there instead of creating a new one each time.
+    """
+    existing = client.get("/stores/my-stores", headers=_headers(store_token))
+    assert existing.status_code == 200, existing.text
+    if existing.json():
+        return existing.json()[0]["id"]
+
     r = client.post(
         "/stores/",
         json={

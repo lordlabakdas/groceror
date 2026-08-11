@@ -7,7 +7,7 @@ Test coverage:
   - Stores:    CRUD, search, activate/deactivate, ownership enforcement
   - Inventory: add, retrieve, delete (store-owner flow)
   - Cart:      add item, get items, update, remove, clear, totals
-  - Orders:    create order (RabbitMQ publisher mocked)
+  - Orders:    create order (order-confirmation email mocked)
 
 Fixtures are defined in conftest.py; shared helpers live in helpers.py.
 """
@@ -124,13 +124,21 @@ class TestAuth:
         assert "token" in r.json()
 
     def test_change_password(self, user_token):
+        new_password = "grocerorTestChanged1!"
         r = client.put(
             "/user/change-password",
-            json={"username": USER_PHONE, "old_password": PASSWORD, "new_password": PASSWORD},
+            json={"username": USER_PHONE, "old_password": PASSWORD, "new_password": new_password},
             headers=_headers(user_token),
         )
         assert r.status_code == 200
         assert r.json()["status"] == "success"
+
+        # The new password must actually persist, and the old one must stop working.
+        r = client.post("/user/login", json={"phone": USER_PHONE, "password": new_password})
+        assert r.status_code == 200, r.text
+
+        r = client.post("/user/login", json={"phone": USER_PHONE, "password": PASSWORD})
+        assert r.status_code == 401
 
     def test_protected_endpoint_requires_token(self):
         r = client.get("/user/refresh-token")
@@ -398,8 +406,8 @@ class TestCart:
 
 class TestOrders:
 
-    @patch("engine.publisher.publish_message")
-    def test_create_order(self, mock_publish, user_token, user_profile, inventory_id):
+    @patch("engine.mailer.Mailer.send")
+    def test_create_order(self, mock_send, user_token, user_profile, inventory_id):
         r = client.post(
             "/order/create-order",
             json={"items": [{"inventory_id": inventory_id, "quantity": 2}]},
@@ -409,15 +417,13 @@ class TestOrders:
         data = r.json()
         assert "id" in data
         assert data["status"] == "pending"
-        assert mock_publish.call_count == 2
-        calls = {c.kwargs["queue_name"] for c in mock_publish.call_args_list}
-        assert calls == {"order_queue", "email_queue"}
-        email_call = next(c for c in mock_publish.call_args_list if c.kwargs["queue_name"] == "email_queue")
-        assert email_call.kwargs["recipient"] == user_profile["email"]
-        assert data["id"] in email_call.kwargs["subject"]
+        mock_send.assert_called_once()
+        kw = mock_send.call_args.kwargs
+        assert kw["recipient"] == user_profile["email"]
+        assert data["id"] in kw["subject"]
 
-    @patch("engine.publisher.publish_message")
-    def test_create_order_empty_items_rejected(self, mock_publish, user_token, user_profile):
+    @patch("engine.mailer.Mailer.send")
+    def test_create_order_empty_items_rejected(self, mock_send, user_token, user_profile):
         r = client.post(
             "/order/create-order",
             json={"items": []},
@@ -437,7 +443,7 @@ class TestOrders:
         _otp_and_verify(phone)
         _register(phone, "user")
         token = _login(phone)
-        with patch("engine.publisher.publish_message"):
+        with patch("engine.mailer.Mailer.send"):
             r = client.post(
                 "/order/create-order",
                 json={"items": [{"inventory_id": "00000000-0000-0000-0000-000000000000", "quantity": 1}]},

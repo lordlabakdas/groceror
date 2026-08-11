@@ -20,7 +20,7 @@ from api.validators.order_validation import (
     UpdateOrderStatusResponse,
     VALID_STATUSES,
 )
-from engine import publisher
+from engine.mailer import Mailer
 from api.sse_bus import publish as sse_publish
 from models.db import db_session
 from models.entity.inventory_entity import Inventory
@@ -55,19 +55,6 @@ def _get_user_profile(entity: PhoneVerification = Depends(auth_required)) -> Use
             detail="User profile not set. Call /user/set-profile first.",
         )
     return user
-
-
-def _serialize(obj):
-    """Recursively convert UUIDs and datetimes to JSON-safe types."""
-    if isinstance(obj, uuid.UUID):
-        return str(obj)
-    if isinstance(obj, list):
-        return [_serialize(item) for item in obj]
-    if isinstance(obj, dict):
-        return {k: _serialize(v) for k, v in obj.items()}
-    if hasattr(obj, "isoformat"):
-        return obj.isoformat()
-    return obj
 
 
 @order_apis.get("/history", response_model=OrderHistoryResponse)
@@ -131,28 +118,8 @@ async def create_order(
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
-    order_dict = _serialize(order.model_dump())
-    order_dict["order_id"] = str(order_entity.id)
-    order_dict["user_id"] = str(current_user.id)
-    order_dict["order_date"] = order.order_date.isoformat()
-    order_dict["total_price"] = order_entity.total_price
-    order_dict["status"] = order_entity.status
-
     try:
-        publisher.publish_message(
-            queue_name="order_queue",
-            routing_key="order_queue",
-            event="order_created",
-            **order_dict,
-        )
-    except Exception:
-        logger.warning("order_id=%s was saved but could not be published", order_entity.id)
-
-    try:
-        publisher.publish_message(
-            queue_name=publisher.EMAIL_QUEUE,
-            routing_key=publisher.EMAIL_QUEUE,
-            event="send_email",
+        Mailer().send(
             recipient=current_user.email,
             subject=f"Order #{order_entity.id} confirmed",
             body=(
@@ -165,7 +132,7 @@ async def create_order(
             ),
         )
     except Exception:
-        logger.warning("order_id=%s email notification could not be published", order_entity.id)
+        logger.warning("order_id=%s email notification could not be sent", order_entity.id)
 
     # Push SSE: notify the store owner that a new order arrived
     if order_entity.store_id:
@@ -241,17 +208,6 @@ async def update_order_status(
     updated = OrderService().update_order_status(order_id, current_store.id, payload.status)
     if not updated:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
-    try:
-        publisher.publish_message(
-            queue_name="order_queue",
-            routing_key="order_queue",
-            event="order_status_updated",
-            order_id=str(order_id),
-            store_id=str(current_store.id),
-            status=payload.status,
-        )
-    except Exception:
-        logger.warning("order_id=%s status updated but could not be published", order_id)
 
     # Push SSE: notify the shopper their order status changed
     order_row = db_session.exec(select(OrderEntity).where(OrderEntity.id == order_id)).first()

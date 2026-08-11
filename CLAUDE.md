@@ -21,7 +21,7 @@ venv/bin/pytest tests/unit/test_dashboard.py::test_dashboard_response_empty -v
 
 ## Configuration
 
-All config lives in `.env` (python-dotenv), not `.config.yml` — the YAML config was replaced by env vars. `config.py` calls `load_dotenv(.env)` and reads `DB_*`, `JWT_*`, `TWILIO_*`, and `RABBITMQ_*` into `DBConfig`, `JWTConfig`, `TwilioConfig`, and `RabbitMQConfig` dataclasses (`DATABASE_URL` overrides the individual `DB_*` fields if set). A stray `.config.yml` may still exist locally from before the migration — it is not read by any code.
+All config lives in `.env` (python-dotenv), not `.config.yml` — the YAML config was replaced by env vars. `config.py` calls `load_dotenv(.env)` and reads `DB_*`, `JWT_*`, `TWILIO_*`, and `RESEND_*` into `DBConfig`, `JWTConfig`, `TwilioConfig`, and `EmailConfig` dataclasses (`DATABASE_URL` overrides the individual `DB_*` fields if set). A stray `.config.yml` may still exist locally from before the migration — it is not read by any code.
 
 ## Architecture
 
@@ -45,14 +45,8 @@ The root `conftest.py` patches `DBConfig.DB_URL` to a SQLite file (`/tmp/test_gr
 
 The shared `TestClient` is defined in `tests/_client.py` and exposed via a session-scoped fixture in `tests/conftest.py`. It also exposes `get_test_otp(phone)`, which reads the OTP back from the SQLite `PhoneVerification` row — the old `/user/otp` endpoint that returned OTPs directly over HTTP was removed for security, so tests must go through `POST /user/send-otp` and then pull the code via this helper rather than the response body.
 
-## Companion Microservices (RabbitMQ)
+## Email
 
-Groceror publishes events to RabbitMQ on key user and order actions. Three companion services consume these:
+Groceror is a monolith — the `groceror-users`, `groceror-orders`, and `groceror-email` companion services and their RabbitMQ integration have been retired. Order confirmation email is now sent synchronously and in-process via `engine/mailer.py`'s `Mailer.send(recipient, subject, body)`, which calls the Resend API directly (config in `EmailConfig`: `RESEND_API_KEY`, `MAIL_FROM`). The former `groceror-users`/`groceror-orders` services only mirrored data that already lives canonically in this app's Postgres tables (`User`/`PhoneVerification`, `Order`/`OrderItem`) to power unused analytics dashboards — that mirroring was dropped rather than ported, since nothing consumed it.
 
-| Service | Queue / Events |
-|---|---|
-| `groceror-users` | `user_registered`, `otp_verified`, `profile_updated`, `password_changed` |
-| `groceror-orders` | `order_created` |
-| `groceror-email` | `email_queue` — `{recipient, subject, body}` |
-
-When modifying user registration, OTP, profile, or order creation flows, be aware these publish side effects.
+When modifying order creation, wrap `Mailer().send(...)` in try/except (matching the existing call site in `api/order_api.py`) so a Resend outage doesn't fail order creation.

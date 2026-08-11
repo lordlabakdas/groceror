@@ -1,0 +1,11 @@
+.git
+.env
+venv/
+venv-backup/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.coverage
+*.db
+.idea

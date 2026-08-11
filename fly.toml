@@ -1,0 +1,39 @@
+# fly.toml — Fly.io deployment config for groceror.
+#
+# This file is committed; secrets are NOT. Before first deploy:
+#   1. fly launch --no-deploy   (creates/links the app, generates a volume-free plan)
+#   2. Set the app name below to match what `fly launch` created (or pass --name).
+#   3. fly secrets set \
+#        DATABASE_URL=... \
+#        JWT_SECRET_KEY=... \
+#        TWILIO_ACCOUNT_SID=... \
+#        TWILIO_AUTH_TOKEN=... \
+#        TWILIO_FROM_NUMBER=... \
+#        RESEND_API_KEY=... \
+#        MAIL_FROM=... \
+#        ADMIN_TOKEN=...
+#   4. fly deploy
+
+app = "groceror"
+primary_region = "iad"
+
+[build]
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [[http_service.checks]]
+    grace_period = "10s"
+    interval = "30s"
+    method = "GET"
+    timeout = "5s"
+    path = "/"
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 1
+  memory_mb = 512

@@ -68,9 +68,9 @@ The schema is created automatically when the app starts (`SQLModel.metadata.crea
 ALTER TABLE inventory ALTER COLUMN user_id DROP NOT NULL;
 ```
 
-### RabbitMQ
+### Email
 
-Order-creation tests mock the RabbitMQ publisher (`engine.publisher.publish_message`) so no broker is needed to run the test suite.
+Order-creation tests mock the mailer (`engine.mailer.Mailer.send`) so no real Resend API call is made to run the test suite.
 
 ---
 

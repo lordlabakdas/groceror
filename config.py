@@ -84,11 +84,9 @@ class AdminConfig(object):
     ADMIN_TOKEN: ClassVar[str] = _env("ADMIN_TOKEN", "groceror-admin-secret")
 
 
-class RabbitMQConfig(object):
-    """RabbitMQ connection configuration"""
+@dataclass
+class EmailConfig(object):
+    """Resend email configuration"""
 
-    HOST: ClassVar[str] = _env("RABBITMQ_HOST", "localhost")
-    PORT: ClassVar[int] = int(_env("RABBITMQ_PORT", "5672"))
-    USER: ClassVar[str] = _env("RABBITMQ_USER", "guest")
-    PASSWORD: ClassVar[str] = _env("RABBITMQ_PASSWORD", "guest")
-    VHOST: ClassVar[str] = _env("RABBITMQ_VIRTUAL_HOST", "/")
+    RESEND_API_KEY: ClassVar[str] = _env("RESEND_API_KEY")
+    MAIL_FROM: ClassVar[str] = _env("MAIL_FROM")

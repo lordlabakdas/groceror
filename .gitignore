@@ -19,3 +19,4 @@ firebaseconfig.json
 .config.yml.bak
 .config.yml~
 venv-backup/
+.coverage

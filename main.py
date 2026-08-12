@@ -62,10 +62,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# cred = credentials.Certificate("firebase_service_account.json")
-# firebase_admin.initialize_app(cred)
-
-
 @app.middleware("http")
 async def close_db_session(request, call_next):
     """Return every thread-local DB session to the pool after each request.
@@ -90,7 +86,6 @@ async def welcome():
 
 
 app.include_router(user_apis)
-# app.include_router(firebase_api, prefix="/firebase")
 app.include_router(google_login_apis)
 app.include_router(inventory_apis)
 # store_follow_apis and featured_store_apis must be registered before

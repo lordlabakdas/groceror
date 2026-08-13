@@ -19,11 +19,13 @@ from fastapi import HTTPException
 # Helpers
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _make_inventory(inv_id, store_id, price=2.50):
+def _make_inventory(inv_id, store_id, price=2.50, quantity=100, name="Test Item"):
     inv = MagicMock()
     inv.id = inv_id
     inv.store_id = store_id
     inv.price = price
+    inv.quantity = quantity
+    inv.name = name
     return inv
 
 

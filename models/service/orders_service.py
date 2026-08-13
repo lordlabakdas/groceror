@@ -51,6 +51,19 @@ class OrderService:
             raise ValueError("All order items must belong to the same store")
         store_id = store_ids.pop()
 
+        # --- Stock availability check ---
+        # Aggregate by inventory_id first so duplicate line items for the same
+        # item are checked against their combined quantity, not individually.
+        requested_qty: dict = {}
+        for item in order.items:
+            requested_qty[item.inventory_id] = requested_qty.get(item.inventory_id, 0) + item.quantity
+        for inv_id, qty in requested_qty.items():
+            inv = inventory_map[inv_id]
+            if qty > inv.quantity:
+                raise ValueError(
+                    f"Insufficient stock for {inv.name}: requested {qty}, available {inv.quantity}"
+                )
+
         original_subtotal = round(
             sum(item.quantity * inventory_map[item.inventory_id].price for item in order.items), 2
         )
@@ -142,6 +155,11 @@ class OrderService:
                     quantity=item.quantity,
                     price=inventory_map[item.inventory_id].price,
                 ))
+
+            # Decrement stock now that availability has been confirmed above.
+            for inv_id, qty in requested_qty.items():
+                inventory_map[inv_id].quantity -= qty
+                db_session.add(inventory_map[inv_id])
 
             # Increment coupon uses_count
             if coupon:

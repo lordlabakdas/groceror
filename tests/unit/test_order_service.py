@@ -3,11 +3,13 @@ from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
 
-def _make_inventory(inv_id, store_id, price=2.50):
+def _make_inventory(inv_id, store_id, price=2.50, quantity=100, name="Test Item"):
     inv = MagicMock()
     inv.id = inv_id
     inv.store_id = store_id
     inv.price = price
+    inv.quantity = quantity
+    inv.name = name
     return inv
 
 
@@ -74,6 +76,46 @@ def test_create_order_raises_if_inventory_missing():
 
         with pytest.raises(ValueError, match="not found"):
             OrderService().create_order(req, user)
+
+
+def test_create_order_raises_if_insufficient_stock():
+    from api.validators.order_validation import CreateOrderRequest, OrderLineItem
+    from models.service.orders_service import OrderService
+
+    store_id = uuid4()
+    inv_id = uuid4()
+    fake_inv = _make_inventory(inv_id, store_id, price=3.00, quantity=2, name="Whole Milk")
+
+    with patch("models.service.orders_service.db_session") as mock_db:
+        mock_db.exec.return_value.all.return_value = [fake_inv]
+        user = MagicMock()
+        user.id = uuid4()
+
+        req = CreateOrderRequest(items=[OrderLineItem(inventory_id=inv_id, quantity=5)])
+
+        with pytest.raises(ValueError, match="Insufficient stock"):
+            OrderService().create_order(req, user)
+
+        mock_db.commit.assert_not_called()
+
+
+def test_create_order_decrements_inventory_quantity():
+    from api.validators.order_validation import CreateOrderRequest, OrderLineItem
+    from models.service.orders_service import OrderService
+
+    store_id = uuid4()
+    inv_id = uuid4()
+    fake_inv = _make_inventory(inv_id, store_id, price=3.00, quantity=10)
+
+    with patch("models.service.orders_service.db_session") as mock_db:
+        mock_db.exec.return_value.all.return_value = [fake_inv]
+        user = MagicMock()
+        user.id = uuid4()
+
+        req = CreateOrderRequest(items=[OrderLineItem(inventory_id=inv_id, quantity=4)])
+        OrderService().create_order(req, user)
+
+        assert fake_inv.quantity == 6
 
 
 def test_create_order_raises_if_mixed_stores():

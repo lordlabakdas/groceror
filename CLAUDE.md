@@ -19,6 +19,10 @@ Run a single test:
 venv/bin/pytest tests/unit/test_dashboard.py::test_dashboard_response_empty -v
 ```
 
+## Development Workflow
+
+Prefer a git worktree over editing directly in this checkout for any non-trivial change (new features, migrations, anything that leaves the app in a broken intermediate state across multiple commits). Create one on its own branch — e.g. `git worktree add ../groceror-<feature> -b <feature-branch>` — do the work there, and merge/push to `master` once it's ready. Trivial one-off fixes (typos, single-line corrections) can still go straight to `master` in the main checkout.
+
 ## Configuration
 
 All config lives in `.env` (python-dotenv), not `.config.yml` — the YAML config was replaced by env vars. `config.py` calls `load_dotenv(.env)` and reads `DB_*`, `JWT_*`, `TWILIO_*`, and `RESEND_*` into `DBConfig`, `JWTConfig`, `TwilioConfig`, and `EmailConfig` dataclasses (`DATABASE_URL` overrides the individual `DB_*` fields if set). A stray `.config.yml` may still exist locally from before the migration — it is not read by any code.

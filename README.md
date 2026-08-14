@@ -7,7 +7,7 @@
 
 A platform connecting local grocery store owners with the shoppers around them.
 
-See [ARCHITECTURE.md](ARCHITECTURE.md) for a system diagram.
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for a system diagram.
 
 - An interface between the local grocery store owner and the consumer
 - Primarily a store-owner-driven platform, rather than an individual-decider one

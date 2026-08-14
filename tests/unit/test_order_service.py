@@ -24,6 +24,7 @@ def test_create_order_snapshots_prices():
 
     with patch("models.service.orders_service.db_session") as mock_db:
         mock_db.exec.return_value.all.return_value = [fake_inv]
+        mock_db.exec.return_value.first.return_value = None  # no prior lifetime spend, no existing loyalty account
         user = MagicMock()
         user.id = uuid4()
 
@@ -52,6 +53,7 @@ def test_create_order_computes_total_price():
 
     with patch("models.service.orders_service.db_session") as mock_db:
         mock_db.exec.return_value.all.return_value = [fake_inv]
+        mock_db.exec.return_value.first.return_value = None  # no prior lifetime spend, no existing loyalty account
         user = MagicMock()
         user.id = uuid4()
 
@@ -109,6 +111,7 @@ def test_create_order_decrements_inventory_quantity():
 
     with patch("models.service.orders_service.db_session") as mock_db:
         mock_db.exec.return_value.all.return_value = [fake_inv]
+        mock_db.exec.return_value.first.return_value = None  # no prior lifetime spend, no existing loyalty account
         user = MagicMock()
         user.id = uuid4()
 

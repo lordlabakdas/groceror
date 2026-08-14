@@ -13,6 +13,7 @@ from models.entity.loyalty_account_entity import LoyaltyAccount
 from models.entity.loyalty_transaction_entity import LoyaltyTransaction
 from models.entity.phone_verification import PhoneVerification
 from models.entity.user_entity import User
+from models.service.orders_service import get_tier_progress
 
 logger = logging.getLogger(__name__)
 loyalty_apis = APIRouter(prefix="/loyalty", tags=["loyalty"])
@@ -33,6 +34,10 @@ class LoyaltyBalanceResponse(BaseModel):
     total_earned: int
     total_redeemed: int
     dollar_value: float        # how much the current balance is worth in $
+    tier: str
+    multiplier: float
+    next_tier: Optional[str] = None
+    spend_to_next_tier: Optional[float] = None
 
 
 class LoyaltyTransactionItem(BaseModel):
@@ -53,15 +58,21 @@ async def get_loyalty_balance(current_user: User = Depends(_get_user)):
     acct = db_session.exec(
         select(LoyaltyAccount).where(LoyaltyAccount.user_id == current_user.id)
     ).first()
+    tier_progress = get_tier_progress(current_user.id)
     if not acct:
         return LoyaltyBalanceResponse(
-            points_balance=0, total_earned=0, total_redeemed=0, dollar_value=0.0
+            points_balance=0,
+            total_earned=0,
+            total_redeemed=0,
+            dollar_value=0.0,
+            **tier_progress,
         )
     return LoyaltyBalanceResponse(
         points_balance=acct.points_balance,
         total_earned=acct.total_earned,
         total_redeemed=acct.total_redeemed,
         dollar_value=round(acct.points_balance / POINTS_PER_DOLLAR_REDEMPTION, 2),
+        **tier_progress,
     )
 
 

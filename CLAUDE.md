@@ -54,3 +54,11 @@ The shared `TestClient` is defined in `tests/_client.py` and exposed via a sessi
 Groceror is a monolith — the `groceror-users`, `groceror-orders`, and `groceror-email` companion services and their RabbitMQ integration have been retired. Order confirmation email is now sent synchronously and in-process via `engine/mailer.py`'s `Mailer.send(recipient, subject, body)`, which calls the Resend API directly (config in `EmailConfig`: `RESEND_API_KEY`, `MAIL_FROM`). The former `groceror-users`/`groceror-orders` services only mirrored data that already lives canonically in this app's Postgres tables (`User`/`PhoneVerification`, `Order`/`OrderItem`) to power unused analytics dashboards — that mirroring was dropped rather than ported, since nothing consumed it.
 
 When modifying order creation, wrap `Mailer().send(...)` in try/except (matching the existing call site in `api/order_api.py`) so a Resend outage doesn't fail order creation.
+
+## CI/CD
+
+`.github/workflows/python-app.yml` runs on every push/PR to `master`: a `test` job (`pytest tests/` against the same isolated SQLite setup as local dev, no secrets or Postgres needed), then a `deploy` job — gated on tests passing, and only on pushes to `master`, not PRs — that runs `flyctl deploy --remote-only` against Fly.io and registers a GitHub Deployment (`chrnorm/deployment-action` / `deployment-status`) so the repo's Deployments tab reflects reality. The workflow also accepts `workflow_dispatch` for an on-demand run without a new commit. Requires the `FLY_API_TOKEN` and `GITHUB_TOKEN` (built-in) secrets — no local `fly deploy` step needed for normal changes; it happens automatically on merge to `master`.
+
+## Feature specs
+
+Non-trivial features get a `SPEC_<NAME>.md` doc in the repo root before implementation — see `SPEC_ORDER_ANALYTICS.md` and `SPEC_REWARDS_PROGRAM.md` for the established format (Background & Goal, Current State with numbered gaps, Proposed Design, Data Contracts, Required Changes per-area, Implementation Order, and an explicit Out of Scope section). Write one collaboratively with the user before starting a similarly-sized feature, rather than jumping straight to code.

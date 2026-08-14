@@ -4,7 +4,7 @@ from datetime import date
 from math import floor
 from uuid import UUID, uuid4
 
-from sqlmodel import select
+from sqlmodel import select, func
 
 from api.validators.order_validation import CreateOrderRequest
 from models.db import db_session
@@ -21,6 +21,15 @@ logger = logging.getLogger(__name__)
 POINTS_PER_DOLLAR = 1
 POINTS_PER_DOLLAR_REDEMPTION = 100
 
+# Rewards tiers (see SPEC_REWARDS_PROGRAM.md): (name, min lifetime spend, points multiplier),
+# ascending by threshold. Tiers only ever go up — lifetime spend is cumulative and never
+# decreases, so there's no downgrade path to handle.
+REWARDS_TIERS = [
+    ("bronze", 0.0, 1.0),
+    ("silver", 250.0, 1.25),
+    ("gold", 750.0, 1.5),
+]
+
 
 def _get_or_create_loyalty_account(user_id: UUID) -> LoyaltyAccount:
     acct = db_session.exec(
@@ -31,6 +40,49 @@ def _get_or_create_loyalty_account(user_id: UUID) -> LoyaltyAccount:
         db_session.add(acct)
         db_session.flush()
     return acct
+
+
+def _get_lifetime_spend(user_id: UUID) -> float:
+    """Sum of total_price across all of a user's non-cancelled orders."""
+    total = db_session.exec(
+        select(func.sum(OrderEntity.total_price)).where(
+            OrderEntity.user_id == user_id,
+            OrderEntity.status != "cancelled",
+        )
+    ).first()
+    return float(total or 0.0)
+
+
+def _tier_for_spend(lifetime_spend: float) -> tuple[str, float]:
+    """Highest tier whose threshold the given lifetime spend meets."""
+    tier_name, multiplier = REWARDS_TIERS[0][0], REWARDS_TIERS[0][2]
+    for name, threshold, mult in REWARDS_TIERS:
+        if lifetime_spend >= threshold:
+            tier_name, multiplier = name, mult
+    return tier_name, multiplier
+
+
+def _get_tier(user_id: UUID) -> tuple[str, float]:
+    """(tier_name, points_multiplier) for a user's current lifetime spend."""
+    return _tier_for_spend(_get_lifetime_spend(user_id))
+
+
+def get_tier_progress(user_id: UUID) -> dict:
+    """Current tier/multiplier plus what's needed to reach the next tier, for API responses."""
+    lifetime_spend = _get_lifetime_spend(user_id)
+    tier_name, multiplier = _tier_for_spend(lifetime_spend)
+    idx = next(i for i, (name, _, _) in enumerate(REWARDS_TIERS) if name == tier_name)
+    if idx + 1 < len(REWARDS_TIERS):
+        next_tier_name, next_threshold, _ = REWARDS_TIERS[idx + 1]
+        spend_to_next_tier = round(next_threshold - lifetime_spend, 2)
+    else:
+        next_tier_name, spend_to_next_tier = None, None
+    return {
+        "tier": tier_name,
+        "multiplier": multiplier,
+        "next_tier": next_tier_name,
+        "spend_to_next_tier": spend_to_next_tier,
+    }
 
 
 class OrderService:
@@ -132,6 +184,11 @@ class OrderService:
         total_discount = round(bulk_discount + coupon_loyalty_discount, 2)
         total_price = round(original_subtotal - total_discount, 2)
 
+        # Tier is based on lifetime spend *before* this order (no Order row exists
+        # for it yet at this point), so this order's own total can't inflate its
+        # own multiplier.
+        _, points_multiplier = _get_tier(current_user.id)
+
         try:
             order_id = uuid4()
             order_entity = OrderEntity(
@@ -179,8 +236,8 @@ class OrderService:
                     description=f"Redeemed for order #{order_id}",
                 ))
 
-            # Award points for spend (1 point per dollar of final total)
-            points_earned = floor(total_price * POINTS_PER_DOLLAR)
+            # Award points for spend (1 point per dollar of final total, scaled by tier)
+            points_earned = floor(total_price * POINTS_PER_DOLLAR * points_multiplier)
             if points_earned > 0:
                 acct.points_balance += points_earned
                 acct.total_earned += points_earned

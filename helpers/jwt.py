@@ -8,7 +8,6 @@ from fastapi.security import OAuth2PasswordBearer
 
 from api.helpers import auth_helper
 from config import JWTConfig
-from models.service.user_service import UserService
 
 logger = logging.getLogger()
 

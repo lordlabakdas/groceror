@@ -30,7 +30,7 @@ graph TD
     groceror -.->|deployed on| Fly
 ```
 
-`main.py` registers 23 routers (`api/*_api.py`); the diagram groups them by concern rather than listing each one. `api/firebase_api.py`/`api/google_login.py` exist but are legacy/unused — see [CLAUDE.md](CLAUDE.md) before touching them.
+`main.py` registers 23 routers (`api/*_api.py`); the diagram groups them by concern rather than listing each one. `api/firebase_api.py` was removed as dead code (never registered in `main.py`); `api/google_login.py` is live — it's the `/login` (Google) route in the diagram above.
 
 ## Deployment
 
@@ -45,4 +45,4 @@ Two entity roles share one auth table: `PhoneVerification` (phone, password hash
 
 ## Feature specs
 
-Larger features get a design doc before implementation — see [SPEC_ORDER_ANALYTICS.md](SPEC_ORDER_ANALYTICS.md) and [SPEC_REWARDS_PROGRAM.md](SPEC_REWARDS_PROGRAM.md).
+Larger features get a design doc before implementation — see [SPEC_ORDER_ANALYTICS.md](../SPEC_ORDER_ANALYTICS.md) and [SPEC_REWARDS_PROGRAM.md](../SPEC_REWARDS_PROGRAM.md).

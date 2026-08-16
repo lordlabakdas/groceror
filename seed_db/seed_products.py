@@ -18,7 +18,7 @@ PRODUCTS = [
     {"name": "Sourdough Bread", "category": InventoryCategory.BAKERY, "default_price": 4.99, "image_url": "https://images.unsplash.com/photo-1509440159596-0249088772ff?w=400&fit=crop"},
     {"name": "Croissants", "category": InventoryCategory.BAKERY, "default_price": 3.49, "image_url": "https://images.unsplash.com/photo-1555507036-ab1f4038808a?w=400&fit=crop"},
     {"name": "Whole Milk", "category": InventoryCategory.DAIRY, "default_price": 3.29, "image_url": "https://images.unsplash.com/photo-1563636619-e9143da7973b?w=400&fit=crop"},
-    {"name": "Cheddar Cheese", "category": InventoryCategory.DAIRY, "default_price": 5.49, "image_url": "https://images.unsplash.com/photo-1618164435226-9e8e7ccfade7?w=400&fit=crop"},
+    {"name": "Cheddar Cheese", "category": InventoryCategory.DAIRY, "default_price": 5.49, "image_url": "https://images.unsplash.com/photo-1683314573422-649a3c6ad784?w=400&fit=crop"},
     {"name": "Greek Yogurt", "category": InventoryCategory.DAIRY, "default_price": 2.99, "image_url": "https://images.unsplash.com/photo-1488477181946-6428a0291777?w=400&fit=crop"},
     {"name": "Chicken Breast", "category": InventoryCategory.MEAT, "default_price": 7.99, "image_url": "https://images.unsplash.com/photo-1604503468506-a8da13d82791?w=400&fit=crop"},
     {"name": "Salmon Fillet", "category": InventoryCategory.MEAT, "default_price": 12.99, "image_url": "https://images.unsplash.com/photo-1519708227418-c8fd9a32b7a2?w=400&fit=crop"},

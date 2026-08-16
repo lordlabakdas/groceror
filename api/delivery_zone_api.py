@@ -92,6 +92,17 @@ async def get_store_delivery_zone(store_id: UUID):
     return zone
 
 
+@delivery_zone_apis.get("/me", response_model=Optional[DeliveryZoneResponse])
+async def get_my_delivery_zone(store: Store = Depends(_get_store)):
+    """Self-scoped equivalent of GET /store/{store_id} for the logged-in
+    store owner, so the frontend never has to resolve its own store_id
+    just to look up its delivery zone (mirrors the PUT/DELETE routes above)."""
+    zone = db_session.exec(
+        select(DeliveryZone).where(DeliveryZone.store_id == store.id)
+    ).first()
+    return zone
+
+
 @delivery_zone_apis.delete("", status_code=status.HTTP_204_NO_CONTENT)
 async def remove_delivery_zone(store: Store = Depends(_get_store)):
     zone = db_session.exec(

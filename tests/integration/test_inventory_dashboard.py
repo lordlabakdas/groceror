@@ -266,6 +266,67 @@ class TestInventoryAddReorder:
         assert item["quantity"] == 7
         assert item["price"] == 4.25
 
+    def test_add_inventory_unit_defaults_to_unit(self):
+        token = _new_store_account("unit")
+        name = _n("NoUnitItem")
+        client.post(
+            "/inventory/add-inventory",
+            json={"name": name, "quantity": 5, "category": "OTHER"},
+            headers=_headers(token),
+        )
+        inv = client.get("/inventory/get-store-inventory", headers=_headers(token)).json()["inventory"]
+        item = next(i for i in inv if i["name"] == name)
+        assert item["unit"] == "UNIT"
+
+    def test_add_inventory_with_explicit_kg_unit(self):
+        token = _new_store_account("unit")
+        name = _n("KgItem")
+        r = client.post(
+            "/inventory/add-inventory",
+            json={"name": name, "quantity": 10, "unit": "KG", "category": "PRODUCE", "price": 2.5},
+            headers=_headers(token),
+        )
+        assert r.status_code == 200
+        inv = client.get("/inventory/get-store-inventory", headers=_headers(token)).json()["inventory"]
+        item = next(i for i in inv if i["name"] == name)
+        assert item["unit"] == "KG"
+        assert item["quantity"] == 10
+
+    def test_add_inventory_reorder_keeps_original_unit(self):
+        """Re-ordering an existing item shouldn't silently change its unit,
+        even if a different unit is passed the second time."""
+        token = _new_store_account("unit")
+        name = _n("GramItem")
+        client.post(
+            "/inventory/add-inventory",
+            json={"name": name, "quantity": 500, "unit": "G", "category": "DAIRY", "price": 3.0},
+            headers=_headers(token),
+        )
+        r = client.post(
+            "/inventory/add-inventory",
+            json={"name": name, "quantity": 1, "unit": "KG", "category": "DAIRY", "price": 3.0},
+            headers=_headers(token),
+        )
+        assert r.status_code == 200
+        inv = client.get("/inventory/get-store-inventory", headers=_headers(token)).json()["inventory"]
+        item = next(i for i in inv if i["name"] == name)
+        assert item["unit"] == "G"  # unchanged from the original add
+        assert item["quantity"] == 501
+
+    def test_update_inventory_unit(self):
+        token = _new_store_account("unit")
+        item_id = _add_item(token, _n("FixUnitItem"), quantity=5, category="OTHER")
+        r = client.put(
+            f"/inventory/{item_id}",
+            json={"unit": "KG"},
+            headers=_headers(token),
+        )
+        assert r.status_code == 200
+        inv = client.get("/inventory/get-store-inventory", headers=_headers(token)).json()["inventory"]
+        item = next(i for i in inv if i["id"] == item_id)
+        assert item["unit"] == "KG"
+        assert item["quantity"] == 5  # unit-only update leaves quantity unchanged
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # INVENTORY: get-store-inventory — items filter, expiry + promo enrichment

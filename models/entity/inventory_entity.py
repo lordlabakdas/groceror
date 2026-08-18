@@ -15,10 +15,17 @@ class InventoryCategory(str, Enum):
     OTHER = "OTHER"
 
 
+class InventoryUnit(str, Enum):
+    UNIT = "UNIT"
+    G = "G"
+    KG = "KG"
+
+
 class Inventory(SQLModel, table=True):
     id: Optional[UUID] = Field(default_factory=uuid4, primary_key=True)
     name: str = Field(index=True)
     quantity: int = Field(default=0)
+    unit: InventoryUnit = Field(default=InventoryUnit.UNIT)
     category: InventoryCategory
     user_id: Optional[UUID] = Field(default=None, foreign_key="user.id", nullable=True)
     store_id: UUID = Field(foreign_key="store.id", index=True)
@@ -33,6 +40,7 @@ class Inventory(SQLModel, table=True):
             "id": self.id,
             "name": self.name,
             "quantity": self.quantity,
+            "unit": self.unit,
             "category": self.category,
             "user_id": self.user_id,
             "store_id": self.store_id,

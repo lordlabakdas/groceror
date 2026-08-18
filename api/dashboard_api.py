@@ -93,7 +93,7 @@ async def get_dashboard(user: PhoneVerification = Depends(auth_required)):
             if is_low:
                 low_stock.append(LowStockItem(
                     id=item.id, name=item.name,
-                    quantity=item.quantity, threshold=threshold,
+                    quantity=item.quantity, unit=item.unit, threshold=threshold,
                 ))
 
     # --- Today's orders ------------------------------------------------------
@@ -139,7 +139,7 @@ async def get_dashboard(user: PhoneVerification = Depends(auth_required)):
             item = inventory_map.get(e.inventory_id)
             if item:
                 expiring_soon.append(ExpiringItem(
-                    id=item.id, name=item.name, quantity=item.quantity,
+                    id=item.id, name=item.name, quantity=item.quantity, unit=item.unit,
                     expiry_date=e.expiry_date,
                     days_remaining=(e.expiry_date - today).days,
                 ))

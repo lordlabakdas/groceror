@@ -214,6 +214,7 @@ async def update_inventory(
         inventory_helper_obj.update_inventory_fields(
             inventory_id=inventory_id,
             quantity=payload.quantity,
+            unit=payload.unit,
             price=payload.price,
         )
     except ValueError as e:
@@ -283,6 +284,7 @@ async def search_inventory(
             category=item.category,
             price=item.price,
             quantity=item.quantity,
+            unit=item.unit,
             notes=item.notes,
             store_id=item.store_id,
             store_name=store_map[item.store_id],

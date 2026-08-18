@@ -7,7 +7,7 @@ from typing import Dict, List, Optional
 from sqlmodel import select
 
 from models.db import db_session
-from models.entity.inventory_entity import Inventory, InventoryCategory
+from models.entity.inventory_entity import Inventory, InventoryCategory, InventoryUnit
 from models.entity.inventory_expiry_entity import InventoryExpiry
 from models.entity.phone_verification import PhoneVerification
 from models.entity.promotion_entity import Promotion
@@ -32,7 +32,13 @@ class InventoryHelper:
         return self.store
 
     def add_inventory(
-        self, name: str, quantity: int, category: Enum, price: float = 0.0, notes: str = None
+        self,
+        name: str,
+        quantity: int,
+        category: Enum,
+        unit: Enum = InventoryUnit.UNIT,
+        price: float = 0.0,
+        notes: str = None,
     ) -> "uuid.UUID":
         store = self._require_store()
 
@@ -44,6 +50,7 @@ class InventoryHelper:
         ).first()
 
         if inventory_obj:
+            # Existing item: keep its established unit — only the quantity/price change.
             inventory_obj.quantity += quantity
             if price > 0:
                 inventory_obj.price = price
@@ -51,6 +58,7 @@ class InventoryHelper:
             inventory_obj = Inventory(
                 name=name,
                 quantity=quantity,
+                unit=InventoryUnit(unit).name,
                 category=InventoryCategory(category).name,
                 store_id=store.id,
                 price=price,
@@ -119,7 +127,11 @@ class InventoryHelper:
         return [inv.to_dict() for inv in results]
 
     def update_inventory_fields(
-        self, inventory_id: uuid.UUID, quantity: Optional[int] = None, price: Optional[float] = None
+        self,
+        inventory_id: uuid.UUID,
+        quantity: Optional[int] = None,
+        unit: Optional[Enum] = None,
+        price: Optional[float] = None,
     ) -> None:
         store = self._require_store()
         existing = db_session.exec(
@@ -130,6 +142,8 @@ class InventoryHelper:
         ).first()
         if not existing:
             raise ValueError("Inventory item not found")
+        if unit is not None:
+            existing.unit = InventoryUnit(unit).name
         if quantity is not None:
             prev_quantity = existing.quantity
             existing.quantity = quantity

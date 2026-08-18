@@ -4,12 +4,13 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field as PydanticField
 
-from models.entity.inventory_entity import InventoryCategory
+from models.entity.inventory_entity import InventoryCategory, InventoryUnit
 
 
 class AddInventoryPayload(BaseModel):
     name: str
     quantity: int
+    unit: InventoryUnit = InventoryUnit.UNIT
     category: InventoryCategory
     price: float = 0.0
     notes: Optional[str] = None
@@ -23,6 +24,7 @@ class StoreInventory(BaseModel):
     id: UUID
     name: str
     quantity: int
+    unit: InventoryUnit
     category: InventoryCategory
     price: float
     store_id: UUID
@@ -39,6 +41,7 @@ class StoreInventoryResponse(BaseModel):
 
 class UpdateInventoryPayload(BaseModel):
     quantity: Optional[int] = None
+    unit: Optional[InventoryUnit] = None
     price: Optional[float] = None
 
 
@@ -56,6 +59,7 @@ class SearchResultItem(BaseModel):
     category: InventoryCategory
     price: float
     quantity: int
+    unit: InventoryUnit
     notes: Optional[str]
     store_id: UUID
     store_name: str
@@ -92,6 +96,7 @@ class LowStockItem(BaseModel):
     id: UUID
     name: str
     quantity: int
+    unit: InventoryUnit
     threshold: int
 
 
@@ -112,6 +117,7 @@ class ExpiringItem(BaseModel):
     id: UUID
     name: str
     quantity: int
+    unit: InventoryUnit
     expiry_date: date
     days_remaining: int = PydanticField(ge=0)
 

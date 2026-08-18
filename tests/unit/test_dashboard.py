@@ -69,7 +69,7 @@ def test_todays_order():
 
 def test_low_stock_item():
     from api.validators.inventory_validation import LowStockItem
-    item = LowStockItem(id=uuid4(), name="Milk", quantity=2, threshold=5)
+    item = LowStockItem(id=uuid4(), name="Milk", quantity=2, unit="UNIT", threshold=5)
     assert item.quantity == 2
     assert item.threshold == 5
     assert item.name == "Milk"
@@ -78,7 +78,7 @@ def test_low_stock_item():
 def test_expiring_item():
     from api.validators.inventory_validation import ExpiringItem
     item = ExpiringItem(
-        id=uuid4(), name="Yogurt", quantity=3,
+        id=uuid4(), name="Yogurt", quantity=3, unit="UNIT",
         expiry_date=date(2026, 5, 28), days_remaining=2,
     )
     assert item.days_remaining == 2

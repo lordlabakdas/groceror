@@ -32,6 +32,7 @@ from api.inventory_api import inventory_apis
 from api.order_api import order_apis
 from api.store_api import store_apis
 from api.user_api import user_apis
+from api.webhook_api import webhook_apis
 from models.db import db_session
 
 # Configure logging
@@ -115,6 +116,7 @@ app.include_router(stock_alert_apis)
 app.include_router(flash_sale_apis)
 app.include_router(back_in_stock_apis)
 app.include_router(sse_apis)
+app.include_router(webhook_apis)
 
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")

@@ -1,6 +1,6 @@
 # Delivery Dispatch (Shiprocket Quick)
 
-**Status:** Draft — under discussion, nothing implemented yet
+**Status:** Implemented on `feat/delivery-dispatch` (both repos), not yet reviewed or merged. Blocked on real Shiprocket Quick credentials before `ShiprocketQuickProvider` can be trusted — see §3.1.
 **Author:** Siddharth Gangadhar + Claude
 **Date:** 2026-08-17
 **Services affected:** groceror (backend), groceror-fe (frontend)
@@ -88,17 +88,18 @@ Must be added to `models/db.py`'s explicit entity-import block (constitution Pri
 
 Grocery orders need packing time, so the quote happens at checkout (pricing the shopper sees) but dispatch happens later (§3.4, store-triggered). Two different moments, two different failure postures:
 
-- **New endpoint:** `POST /order/delivery-quote` — takes a dropoff address (lat/lng, collected from the shopper at checkout, addressing Gap G4) and the store's pickup point (reused from `DeliveryZone.latitude`/`longitude` — already exists per store). Returns `{quote_id, fee, expires_at}`.
+- **New endpoint:** `POST /order/delivery-quote` — takes a dropoff address (lat/lng, collected from the shopper at checkout, addressing Gap G4) and the store's pickup point (reused from `DeliveryZone.latitude`/`longitude` — already exists per store). Returns `{quote_id, fee, expires_at}`. **This is a preview only**, for the shopper to see a fee before committing — see the implementation note below on why it isn't the source of truth for what gets charged.
 - This call is **blocking and essential**, unlike the `Mailer().send()` pattern (Principle V's "fail soft, log, continue" applies to *non-essential* side effects — a wrong or missing delivery fee is not that). If the quote call fails or Shiprocket Quick reports the address unserviceable, checkout falls back to a "delivery unavailable — pickup only" state; it does not block placing the order for pickup.
-- `CreateOrderRequest` gets an optional `quote_id` field. `create_order()` re-validates the quote hasn't expired before finalizing an order that includes delivery; an expired quote returns `409 Conflict` and the frontend re-quotes rather than silently charging a stale price.
+- `CreateOrderRequest` gets `delivery_address_line`/`delivery_lat`/`delivery_lng` (optional — absent means pickup, no delivery). `create_order()` does **not** take or trust a client-echoed `quote_id`/fee — it re-quotes fresh, server-side, at order-creation time, the same way the preview call did, and uses that authoritative fee. This is simpler than the quote-id-plus-expiry-tracking design floated during the original brainstorm, and was refined during implementation (2026-08-18): tracking a quote through checkout only pays off if the fee is genuinely being locked in, and with pass-through pricing (no Groceror markup) there's nothing for a stale quote_id to protect that a fresh, cheap re-quote doesn't already handle better — a quote_id valid for minutes would usually be stale by request-delivery time anyway (§3.4), so nothing downstream depends on the original one surviving past the preview.
 - `Order` gets a new nullable `delivery_fee` field, included in `total_price` at creation — kept on `Order` rather than only on `Delivery` so every existing place that reads `total_price` (order history, dashboard, store orders) doesn't need to learn to sum two tables.
+- **Known limitation, accepted for v1:** the fee shown at checkout preview and the fee actually charged at order-creation can differ slightly if pricing moved between the two calls (usually seconds apart in practice). Not solved with quote-locking in v1 — see above.
 - `Order` also gets `delivery_address_line`, `delivery_lat`, `delivery_lng` (nullable) — addressing Gap G4. Captured once at checkout, not read from `User.location`, since a shopper may want delivery somewhere other than their profile address.
 
 ### 3.4 Dispatch: the store-triggered step
 
 - `store-orders.tsx` shows a **"Request Delivery"** button once `order.status == "ready"` (existing status — no new `Order` status needed to gate this).
-- **New endpoint:** `POST /order/{order_id}/request-delivery` (store-authenticated, same `_get_store_profile` dependency as `update_order_status`). Creates/updates the `Delivery` row (`status=requested`) and calls `ShiprocketQuickProvider.create_delivery()` using the quote already locked at checkout.
-- If dispatch creation fails here (quote long expired, vendor rejects, pickup point moved), `Delivery.status = failed`, the store owner sees a clear message, and **there is no automatic retry** — the store falls back to self-arranged delivery, matching the "keep it simple, fail" decision. This failure mode *is* the Mailer-style case: dispatch is a side effect on an order that already exists and is already paid for, so failing soft (log, surface, move on) is the right posture here, unlike the checkout-time quote.
+- **New endpoint:** `POST /order/{order_id}/request-delivery` (store-authenticated, same `_get_store_profile` dependency as `update_order_status`). Packing takes real time, so this re-quotes fresh (same `DeliveryService.get_quote()` used at checkout, against the order's stored dropoff coordinates) rather than reusing anything from order-creation time, then calls `ShiprocketQuickProvider.create_delivery()` with that fresh quote. This is when the `Delivery` row is actually created (`status="requested"`, then updated as the vendor call returns).
+- If dispatch creation fails here (address no longer serviceable, vendor rejects), `Delivery.status = failed`, the store owner sees a clear message, and **there is no automatic retry** — the store falls back to self-arranged delivery, matching the "keep it simple, fail" decision. This failure mode *is* the Mailer-style case: dispatch is a side effect on an order that already exists and is already paid for, so failing soft (log, surface, move on) is the right posture here, unlike the checkout-time quote.
 
 ### 3.5 Webhook ingestion & real-time status
 
@@ -119,11 +120,11 @@ No upfront reconciliation between a store's self-defined `/delivery-zones` geofe
 // → response
 { "quote_id": "sq_abc123", "fee": 45.00, "expires_at": "2026-08-17T14:35:00Z" }
 
-// POST /order/create-order  →  request gets one new optional field
+// POST /order/create-order  →  request gets new optional fields (absent = pickup, no delivery)
 { "items": [...], "coupon_code": null, "points_to_redeem": 0,
-  "quote_id": "sq_abc123",
   "delivery_address_line": "12 Anna Salai, T. Nagar",
   "delivery_lat": 13.0827, "delivery_lng": 80.2707 }
+// no quote_id here — create_order() re-quotes fresh server-side (§3.3)
 
 // POST /order/{order_id}/request-delivery  →  response
 { "delivery_id": "uuid", "status": "requested" }
@@ -136,29 +137,37 @@ No upfront reconciliation between a store's self-defined `/delivery-zones` geofe
 ## 5. Required Changes
 
 **Backend (`groceror`)**
+Implemented 2026-08-19, on branch `feat/delivery-dispatch` in both repos (worktrees, per constitution Principle III). Not yet reviewed, not merged.
+
 - `models/entity/delivery_entity.py`: new `Delivery` entity (§3.2)
-- `models/db.py`: register `Delivery` in the entity-import block (Principle II)
-- Alembic migration for `Delivery`, plus `Order.delivery_fee`, `Order.delivery_address_line`, `Order.delivery_lat`, `Order.delivery_lng`
-- `config.py`: add `ShiprocketConfig`
-- `engine/delivery/` (new): `DeliveryProvider` protocol + `ShiprocketQuickProvider` implementation + a fake/stub provider for tests (constitution Principle II — no live vendor calls in the test suite)
-- `api/order_api.py`: new `POST /order/delivery-quote` and `POST /order/{order_id}/request-delivery` routes; extend `create_order()` to accept and validate `quote_id`
-- `api/validators/order_validation.py`: `CreateOrderRequest` gets `quote_id`, `delivery_address_line`, `delivery_lat`, `delivery_lng`; new request/response models for the quote and dispatch endpoints
-- New `api/webhook_api.py` (or extend an existing router): `POST /webhooks/shiprocket-quick`, with signature verification
-- `models/service/orders_service.py`: quote-expiry validation in `create_order()`; new dispatch/webhook-handling logic (own service or extend `orders_service.py`)
-- Tests: fake-provider unit tests for the quote/dispatch/webhook flows; integration test for expired-quote rejection; integration test for the unserviceable-address path
+- `models/entity/orders_entity.py`: `Order` gets `delivery_fee`, `delivery_address_line`, `delivery_lat`, `delivery_lng`
+- `models/db.py`: registered `Delivery` in the entity-import block (Principle II)
+- `alembic/versions/a22a6b80ddeb_add_delivery_dispatch.py`: creates `delivery`, adds the four `order` columns, enables RLS on `delivery` (matching every other table per the existing RLS migration)
+- `config.py`: added `ShiprocketConfig`
+- `engine/delivery/`: `DeliveryProvider` protocol (`provider.py`), `FakeDeliveryProvider` for tests (`fake_provider.py`), `ShiprocketQuickProvider` (`shiprocket_quick.py`, unverified — see §3.1), and `get_delivery_provider()` as the one swap point (`__init__.py`)
+- `models/service/delivery_service.py` (new): `get_quote()`, `request_delivery()`, `apply_webhook_update()` — called from `orders_service.py.create_order()` the same way it already calls into `bulk_rule_api.apply_bulk_rules`
+- `models/service/orders_service.py`: `create_order()` re-quotes and folds `delivery_fee` into `total_price` when delivery fields are present
+- `api/order_api.py`: `POST /order/delivery-quote`, `POST /order/{order_id}/request-delivery`; `GET /order/store-orders` and `GET /order/history` both extended with `delivery_fee`/`delivery_status` per order — this wasn't in the original Required Changes list but turned out to be necessary for the frontend to know whether/what to show
+- `api/validators/order_validation.py`: new request/response models; `CreateOrderRequest`, `OrderCreatedResponse`, `StoreOrderItem`, `OrderHistoryItem` all extended
+- `api/webhook_api.py` (new): `POST /webhooks/shiprocket-quick`, HMAC-SHA256 signature verification (scheme unverified, see the file's own docstring)
+- `main.py`: registered `webhook_apis`
+- `requirements.txt`: added `requests` (used directly by `ShiprocketQuickProvider`, previously only a transitive dependency)
+- Tests: `tests/unit/test_delivery_provider.py`, `tests/unit/test_delivery_service.py`, two new cases in `tests/unit/test_order_service.py`, `tests/integration/test_delivery_dispatch.py` (quote, order creation, dispatch, webhook auth, list-endpoint field checks) — all against `FakeDeliveryProvider`, no live vendor calls (Principle II)
 
 **Frontend (`groceror-fe`)**
-- `client/src/components/cart-drawer.tsx`: fetch a delivery quote before "Place Order," show the fee as a line item, handle quote expiry (re-quote) and the pickup-only fallback when quoting fails
-- New address-capture UI at checkout (Gap G4 — nothing collects a delivery address today)
-- `client/src/pages/store-orders.tsx`: "Request Delivery" action once an order is `ready`; show `Delivery.status` and rider info once requested
-- `client/src/pages/orders.tsx`: show delivery status/tracking to the shopper, updated live via the existing SSE hook (`use-sse.ts`) extended for `delivery_status_update`
-- `client/src/types/models.ts`: add `Delivery`-related types
+- `client/src/components/cart-drawer.tsx`: pickup/delivery toggle in `PaymentView`; delivery address + "use my location" (matches the existing pattern in `delivery-zone.tsx`) instead of a full address/geocoding UI; auto-quotes on location set via `POST /order/delivery-quote`; fee folded into the total breakdown; submit disabled while quoting or on an unresolved quote error; `ConfirmationView` shows the fee and different "what happens next" copy for delivery vs. pickup
+- `client/src/pages/store-orders.tsx`: "Request Delivery" / "Retry delivery" action, gated on `status === "ready"` and no active delivery; shows `delivery_status` inline
+- `client/src/pages/orders.tsx`: delivery status + fee shown in the expanded order card
+- `client/src/hooks/use-sse.ts`: new `delivery_status_update` listener, invalidates both order-history and store-orders queries and toasts
+- No changes needed in `client/src/types/models.ts` — order shapes are typed locally in each page/component rather than centrally, so the new fields were added at each of those local interfaces instead
+
+**Known v1 gap carried forward, not addressed here:** delivery address entry is geolocation-only (no manual address/lat-lng entry, no geocoding) — a shopper without location permission or on a desktop without GPS can't select delivery. Worth revisiting once there's real pilot feedback on how often this blocks someone.
 
 ## 6. Error Handling
 
-- Quote call fails or times out at checkout → delivery marked unavailable, shopper can still place a pickup-only order (fail soft, per §3.3)
-- Quote expired by the time `create_order()` runs → `409 Conflict`, frontend re-quotes
-- `request-delivery` call fails (vendor rejects, quote stale) → `Delivery.status = failed`, store notified, no auto-retry, store falls back to self-arranged delivery (fail soft, per §3.4)
+- Quote call fails or times out at checkout preview → delivery marked unavailable, shopper can still place a pickup-only order (fail soft, per §3.3)
+- Quote call fails at `create_order()` time itself (address genuinely unserviceable — a rare race, since the preview call moments earlier should have already caught this) → `400`, same message as the preview failure
+- `request-delivery` call fails (vendor rejects the fresh quote, address no longer serviceable) → `Delivery.status = failed`, store notified, no auto-retry, store falls back to self-arranged delivery (fail soft, per §3.4)
 - Webhook reports a failed delivery → `Delivery.status = failed`, SSE to shopper, `Order.status` is **not** auto-advanced to `delivered`
 - Unverified/unsigned webhook request → `401`, logged, no state change
 
@@ -168,7 +177,7 @@ No upfront reconciliation between a store's self-defined `/delivery-zones` geofe
 2. Backend: `Delivery` entity + migration + `models/db.py` registration
 3. Backend: `DeliveryProvider` interface + fake provider for tests + `ShiprocketQuickProvider`
 4. Backend: `POST /order/delivery-quote`
-5. Backend: extend `create_order()` for `quote_id` + delivery address fields, add `Order.delivery_fee`
+5. Backend: extend `create_order()` to re-quote server-side when delivery address fields are present, add `Order.delivery_fee`
 6. Backend: `POST /order/{order_id}/request-delivery`
 7. Backend: `POST /webhooks/shiprocket-quick` + SSE push
 8. Frontend: checkout quote step + address capture in `cart-drawer.tsx`

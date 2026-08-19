@@ -1,7 +1,7 @@
 """add delivery dispatch (Shiprocket Quick)
 
 Revision ID: a22a6b80ddeb
-Revises: 0299fe7a78b5
+Revises: ecc26c500768
 Create Date: 2026-08-18
 
 See SPEC_DELIVERY_DISPATCH.md for the design this implements.
@@ -10,7 +10,7 @@ See SPEC_DELIVERY_DISPATCH.md for the design this implements.
 from alembic import op
 
 revision = "a22a6b80ddeb"
-down_revision = "0299fe7a78b5"
+down_revision = "ecc26c500768"
 branch_labels = None
 depends_on = None
 

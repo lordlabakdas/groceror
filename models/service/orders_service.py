@@ -14,6 +14,7 @@ from models.entity.loyalty_account_entity import LoyaltyAccount
 from models.entity.loyalty_transaction_entity import LoyaltyTransaction
 from models.entity.order_item_entity import OrderItem
 from models.entity.orders_entity import Order as OrderEntity
+from models.service.delivery_service import DeliveryService
 
 logger = logging.getLogger(__name__)
 
@@ -184,6 +185,19 @@ class OrderService:
         total_discount = round(bulk_discount + coupon_loyalty_discount, 2)
         total_price = round(original_subtotal - total_discount, 2)
 
+        # --- Delivery (see SPEC_DELIVERY_DISPATCH.md §3.3) ---
+        # Re-quoted fresh server-side here, never taken from the client, even
+        # though the shopper likely already saw a preview via
+        # POST /order/delivery-quote moments earlier. Pass-through pricing
+        # (no Groceror markup) means there's nothing a client-supplied fee
+        # would be trying to bypass in the first place, but the fee still
+        # has to come from the vendor, not the request body.
+        delivery_fee = None
+        if order.delivery_lat is not None and order.delivery_lng is not None:
+            quote = DeliveryService().get_quote(store_id, order.delivery_lat, order.delivery_lng)
+            delivery_fee = quote.fee
+            total_price = round(total_price + delivery_fee, 2)
+
         # Tier is based on lifetime spend *before* this order (no Order row exists
         # for it yet at this point), so this order's own total can't inflate its
         # own multiplier.
@@ -201,6 +215,10 @@ class OrderService:
                 points_redeemed=points_redeemed,
                 coupon_code=coupon_code,
                 status="pending",
+                delivery_fee=delivery_fee,
+                delivery_address_line=order.delivery_address_line,
+                delivery_lat=order.delivery_lat,
+                delivery_lng=order.delivery_lng,
             )
             db_session.add(order_entity)
             db_session.flush()

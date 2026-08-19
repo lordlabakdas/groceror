@@ -90,3 +90,20 @@ class EmailConfig(object):
 
     RESEND_API_KEY: ClassVar[str] = _env("RESEND_API_KEY")
     MAIL_FROM: ClassVar[str] = _env("MAIL_FROM")
+
+
+@dataclass
+class ShiprocketConfig(object):
+    """Shiprocket Quick hyperlocal delivery configuration.
+
+    NOTE: field names/shape are a best guess pending a real Shiprocket Quick
+    business account — see SPEC_DELIVERY_DISPATCH.md §3.1. Adjust once real
+    credentials and docs are in hand.
+    """
+
+    API_KEY: ClassVar[str] = _env("SHIPROCKET_API_KEY")
+    API_SECRET: ClassVar[str] = _env("SHIPROCKET_API_SECRET")
+    WEBHOOK_SECRET: ClassVar[str] = _env("SHIPROCKET_WEBHOOK_SECRET")
+    BASE_URL: ClassVar[str] = _env(
+        "SHIPROCKET_BASE_URL", "https://api.shiprocket.in/quick/v1"
+    )

@@ -80,6 +80,67 @@ def test_create_order_raises_if_inventory_missing():
             OrderService().create_order(req, user)
 
 
+def test_create_order_includes_delivery_fee_in_total():
+    from api.validators.order_validation import CreateOrderRequest, OrderLineItem
+    from models.entity.orders_entity import Order as OrderEntity
+    from models.service.orders_service import OrderService
+    from engine.delivery.provider import Quote
+
+    store_id = uuid4()
+    inv_id = uuid4()
+    fake_inv = _make_inventory(inv_id, store_id, price=2.50)
+
+    with patch("models.service.orders_service.db_session") as mock_db, \
+         patch("models.service.orders_service.DeliveryService") as mock_delivery_service_cls:
+        mock_db.exec.return_value.all.return_value = [fake_inv]
+        mock_db.exec.return_value.first.return_value = None
+        mock_delivery_service_cls.return_value.get_quote.return_value = Quote(
+            quote_id="q1", fee=45.0, expires_at=MagicMock()
+        )
+        user = MagicMock()
+        user.id = uuid4()
+
+        req = CreateOrderRequest(
+            items=[OrderLineItem(inventory_id=inv_id, quantity=4)],
+            delivery_address_line="12 Anna Salai",
+            delivery_lat=13.0827,
+            delivery_lng=80.2707,
+        )
+        OrderService().create_order(req, user)
+
+        calls = mock_db.add.call_args_list
+        order_entities = [c[0][0] for c in calls if isinstance(c[0][0], OrderEntity)]
+        assert len(order_entities) == 1
+        # 4 * 2.50 subtotal + 45.00 delivery fee
+        assert order_entities[0].total_price == 55.00
+        assert order_entities[0].delivery_fee == 45.0
+        assert order_entities[0].delivery_address_line == "12 Anna Salai"
+
+
+def test_create_order_pickup_has_no_delivery_fee():
+    from api.validators.order_validation import CreateOrderRequest, OrderLineItem
+    from models.entity.orders_entity import Order as OrderEntity
+    from models.service.orders_service import OrderService
+
+    store_id = uuid4()
+    inv_id = uuid4()
+    fake_inv = _make_inventory(inv_id, store_id, price=2.50)
+
+    with patch("models.service.orders_service.db_session") as mock_db:
+        mock_db.exec.return_value.all.return_value = [fake_inv]
+        mock_db.exec.return_value.first.return_value = None
+        user = MagicMock()
+        user.id = uuid4()
+
+        req = CreateOrderRequest(items=[OrderLineItem(inventory_id=inv_id, quantity=4)])
+        OrderService().create_order(req, user)
+
+        calls = mock_db.add.call_args_list
+        order_entities = [c[0][0] for c in calls if isinstance(c[0][0], OrderEntity)]
+        assert order_entities[0].total_price == 10.00
+        assert order_entities[0].delivery_fee is None
+
+
 def test_create_order_raises_if_insufficient_stock():
     from api.validators.order_validation import CreateOrderRequest, OrderLineItem
     from models.service.orders_service import OrderService

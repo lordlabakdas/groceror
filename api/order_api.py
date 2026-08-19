@@ -9,10 +9,13 @@ from sqlmodel import select
 from helpers.jwt import auth_required
 from api.validators.order_validation import (
     CreateOrderRequest,
+    DeliveryQuoteRequest,
+    DeliveryQuoteResponse,
     OrderCreatedResponse,
     OrderHistoryItem,
     OrderHistoryLineItem,
     OrderHistoryResponse,
+    RequestDeliveryResponse,
     StoreOrderItem,
     StoreOrderLineItem,
     StoreOrdersResponse,
@@ -23,12 +26,14 @@ from api.validators.order_validation import (
 from engine.mailer import Mailer
 from api.sse_bus import publish as sse_publish
 from models.db import db_session
+from models.entity.delivery_entity import Delivery
 from models.entity.inventory_entity import Inventory
 from models.entity.order_item_entity import OrderItem
 from models.entity.orders_entity import Order as OrderEntity
 from models.entity.phone_verification import PhoneVerification
 from models.entity.store_entity import Store
 from models.entity.user_entity import User
+from models.service.delivery_service import DeliveryService
 from models.service.orders_service import OrderService
 
 logger = logging.getLogger(__name__)
@@ -88,6 +93,9 @@ async def get_order_history(current_user: User = Depends(_get_user_profile)):
         stores = db_session.exec(select(Store).where(Store.id.in_(store_ids))).all()
         store_name_map = {s.id: s.name for s in stores}
 
+    deliveries = db_session.exec(select(Delivery).where(Delivery.order_id.in_(order_ids))).all()
+    delivery_status_by_order = {d.order_id: d.status for d in deliveries}
+
     return OrderHistoryResponse(
         orders=[
             OrderHistoryItem(
@@ -101,10 +109,27 @@ async def get_order_history(current_user: User = Depends(_get_user_profile)):
                 order_date=o.order_date,
                 store_id=o.store_id,
                 store_name=store_name_map.get(o.store_id) if o.store_id else None,
+                delivery_fee=o.delivery_fee,
+                delivery_status=delivery_status_by_order.get(o.id),
             )
             for o in orders
         ]
     )
+
+
+@order_apis.post("/delivery-quote", response_model=DeliveryQuoteResponse)
+async def get_delivery_quote(
+    req: DeliveryQuoteRequest,
+    current_user: User = Depends(_get_user_profile),
+):
+    """Preview a delivery fee before checkout. Not the source of truth for
+    what gets charged — create_order() re-quotes fresh. See
+    SPEC_DELIVERY_DISPATCH.md §3.3."""
+    try:
+        quote = DeliveryService().get_quote(req.store_id, req.dropoff_lat, req.dropoff_lng)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    return DeliveryQuoteResponse(quote_id=quote.quote_id, fee=quote.fee, expires_at=quote.expires_at)
 
 
 @order_apis.post("/create-order", response_model=OrderCreatedResponse)
@@ -152,6 +177,7 @@ async def create_order(
         total_price=order_entity.total_price,
         discount_amount=order_entity.discount_amount,
         points_earned=points_earned,
+        delivery_fee=order_entity.delivery_fee,
     )
 
 
@@ -180,6 +206,9 @@ async def get_store_orders(current_store: Store = Depends(_get_store_profile)):
             )
         )
 
+    deliveries = db_session.exec(select(Delivery).where(Delivery.order_id.in_(order_ids))).all()
+    delivery_status_by_order = {d.order_id: d.status for d in deliveries}
+
     return StoreOrdersResponse(
         orders=[
             StoreOrderItem(
@@ -188,6 +217,8 @@ async def get_store_orders(current_store: Store = Depends(_get_store_profile)):
                 status=o.status,
                 items=items_by_order[o.id],
                 order_date=o.order_date,
+                delivery_fee=o.delivery_fee,
+                delivery_status=delivery_status_by_order.get(o.id),
             )
             for o in orders
         ]
@@ -219,3 +250,34 @@ async def update_order_status(
         )
 
     return UpdateOrderStatusResponse(message="Status updated", status=updated.status)
+
+
+@order_apis.post("/{order_id}/request-delivery", response_model=RequestDeliveryResponse)
+async def request_delivery(
+    order_id: uuid.UUID,
+    current_store: Store = Depends(_get_store_profile),
+):
+    """Store-triggered dispatch, once an order is packed. See
+    SPEC_DELIVERY_DISPATCH.md §3.4 — this is intentionally manual, not
+    automatic on order-ready."""
+    try:
+        delivery = DeliveryService().request_delivery(order_id, current_store.id)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+    # Push SSE: notify the shopper their delivery status changed, same
+    # pattern as update_order_status above. Not sent on a failed dispatch —
+    # that's surfaced to the store, not the shopper, who sees nothing
+    # different yet (the store falls back to self-arranged delivery).
+    if delivery.status != "failed":
+        order_row = db_session.exec(select(OrderEntity).where(OrderEntity.id == order_id)).first()
+        if order_row and order_row.user_id:
+            sse_publish(
+                str(order_row.user_id),
+                "delivery_status_update",
+                {"order_id": str(order_id), "status": delivery.status},
+            )
+
+    return RequestDeliveryResponse(
+        delivery_id=delivery.id, status=delivery.status, quoted_fee=delivery.quoted_fee
+    )

@@ -18,6 +18,12 @@ class CreateOrderRequest(BaseModel):
     order_date: datetime = Field(default_factory=datetime.utcnow)
     coupon_code: Optional[str] = None
     points_to_redeem: int = Field(default=0, ge=0)
+    # Absent = pickup order, no delivery. See SPEC_DELIVERY_DISPATCH.md §3.3
+    # for why this re-quotes server-side rather than taking a client-supplied
+    # fee or quote_id.
+    delivery_address_line: Optional[str] = None
+    delivery_lat: Optional[float] = None
+    delivery_lng: Optional[float] = None
 
 
 class OrderCreatedResponse(BaseModel):
@@ -26,6 +32,7 @@ class OrderCreatedResponse(BaseModel):
     total_price: float
     discount_amount: float
     points_earned: int
+    delivery_fee: Optional[float] = None
 
 
 class OrderHistoryLineItem(BaseModel):
@@ -46,6 +53,9 @@ class OrderHistoryItem(BaseModel):
     order_date: datetime
     store_id: Optional[UUID] = None
     store_name: Optional[str] = None
+    # None = pickup order (no delivery requested). See SPEC_DELIVERY_DISPATCH.md.
+    delivery_fee: Optional[float] = None
+    delivery_status: Optional[str] = None
 
 
 class OrderHistoryResponse(BaseModel):
@@ -65,6 +75,9 @@ class StoreOrderItem(BaseModel):
     status: str
     items: List[StoreOrderLineItem]
     order_date: datetime
+    # None = pickup order (no delivery requested). See SPEC_DELIVERY_DISPATCH.md.
+    delivery_fee: Optional[float] = None
+    delivery_status: Optional[str] = None
 
 
 class StoreOrdersResponse(BaseModel):
@@ -78,3 +91,24 @@ class UpdateOrderStatusPayload(BaseModel):
 class UpdateOrderStatusResponse(BaseModel):
     message: str
     status: str
+
+
+# ── Delivery dispatch (see SPEC_DELIVERY_DISPATCH.md) ──────────────────────
+
+
+class DeliveryQuoteRequest(BaseModel):
+    store_id: UUID
+    dropoff_lat: float
+    dropoff_lng: float
+
+
+class DeliveryQuoteResponse(BaseModel):
+    quote_id: str
+    fee: float
+    expires_at: datetime
+
+
+class RequestDeliveryResponse(BaseModel):
+    delivery_id: UUID
+    status: str
+    quoted_fee: float

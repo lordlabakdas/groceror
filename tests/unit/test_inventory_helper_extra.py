@@ -189,7 +189,13 @@ def test_update_inventory_endpoint_returns_500_on_unexpected_error():
     from main import app
     from helpers.jwt import auth_required
 
-    mock_user = MagicMock()
+    # A real UUID, not a bare MagicMock: update_inventory now runs through
+    # _require_billing_ok first (SPEC_SUBSCRIPTION.md §3.3), which queries
+    # Store.entity_id == user.id — a MagicMock() id isn't a bindable SQL
+    # parameter. No Store matches this id, so the billing check is a no-op
+    # and this test still exercises what it's actually testing: the mocked
+    # InventoryHelper raising and the endpoint's generic 500 handling.
+    mock_user = MagicMock(id=uuid4())
 
     async def override_auth():
         return mock_user

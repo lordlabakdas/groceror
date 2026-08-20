@@ -12,6 +12,7 @@ from models.entity.inventory_entity import Inventory
 from models.entity.phone_verification import PhoneVerification
 from models.entity.stock_threshold_entity import StockThreshold
 from models.entity.store_entity import Store
+from models.service import subscription_service
 
 stock_alert_apis = APIRouter(prefix="/stock-alerts", tags=["stock-alerts"])
 
@@ -22,6 +23,13 @@ async def _get_store(entity: PhoneVerification = Depends(auth_required)) -> Stor
     store = db_session.exec(select(Store).where(Store.entity_id == entity.id)).first()
     if not store:
         raise HTTPException(status_code=400, detail="Store profile not set")
+    return store
+
+
+async def _get_store_write(store: Store = Depends(_get_store)) -> Store:
+    """Mutation-path variant of _get_store — 402s a billing-locked store.
+    See SPEC_SUBSCRIPTION.md §3.3."""
+    subscription_service.assert_billing_ok(store)
     return store
 
 
@@ -67,7 +75,7 @@ async def list_stock_alerts(store: Store = Depends(_get_store)):
 
 
 @stock_alert_apis.post("/{alert_id}/acknowledge", response_model=StockAlertResponse)
-async def acknowledge_alert(alert_id: UUID, store: Store = Depends(_get_store)):
+async def acknowledge_alert(alert_id: UUID, store: Store = Depends(_get_store_write)):
     st = db_session.exec(select(StockThreshold).where(StockThreshold.id == alert_id)).first()
     if not st:
         raise HTTPException(status_code=404, detail="Alert not found")

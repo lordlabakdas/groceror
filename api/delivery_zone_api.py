@@ -13,6 +13,7 @@ from models.db import db_session
 from models.entity.delivery_zone_entity import DeliveryZone
 from models.entity.phone_verification import PhoneVerification
 from models.entity.store_entity import Store
+from models.service import subscription_service
 
 logger = logging.getLogger(__name__)
 delivery_zone_apis = APIRouter(prefix="/delivery-zones", tags=["delivery-zones"])
@@ -35,6 +36,13 @@ def _get_store(entity: PhoneVerification = Depends(auth_required)) -> Store:
     store = db_session.exec(select(Store).where(Store.entity_id == entity.id)).first()
     if not store:
         raise HTTPException(status_code=400, detail="Store profile not set")
+    return store
+
+
+def _get_store_write(store: Store = Depends(_get_store)) -> Store:
+    """Mutation-path variant of _get_store — 402s a billing-locked store.
+    See SPEC_SUBSCRIPTION.md §3.3."""
+    subscription_service.assert_billing_ok(store)
     return store
 
 
@@ -62,7 +70,7 @@ class NearbyStoreResponse(BaseModel):
 
 
 @delivery_zone_apis.put("", response_model=DeliveryZoneResponse)
-async def set_delivery_zone(payload: SetDeliveryZonePayload, store: Store = Depends(_get_store)):
+async def set_delivery_zone(payload: SetDeliveryZonePayload, store: Store = Depends(_get_store_write)):
     zone = db_session.exec(
         select(DeliveryZone).where(DeliveryZone.store_id == store.id)
     ).first()
@@ -104,7 +112,7 @@ async def get_my_delivery_zone(store: Store = Depends(_get_store)):
 
 
 @delivery_zone_apis.delete("", status_code=status.HTTP_204_NO_CONTENT)
-async def remove_delivery_zone(store: Store = Depends(_get_store)):
+async def remove_delivery_zone(store: Store = Depends(_get_store_write)):
     zone = db_session.exec(
         select(DeliveryZone).where(DeliveryZone.store_id == store.id)
     ).first()

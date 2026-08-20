@@ -12,6 +12,7 @@ from models.entity.flash_sale_entity import FlashSale
 from models.entity.inventory_entity import Inventory
 from models.entity.phone_verification import PhoneVerification
 from models.entity.store_entity import Store
+from models.service import subscription_service
 
 flash_sale_apis = APIRouter(prefix="/flash-sales", tags=["flash-sales"])
 
@@ -22,6 +23,13 @@ async def _get_store(entity: PhoneVerification = Depends(auth_required)) -> Stor
     store = db_session.exec(select(Store).where(Store.entity_id == entity.id)).first()
     if not store:
         raise HTTPException(status_code=400, detail="Store profile not set")
+    return store
+
+
+async def _get_store_write(store: Store = Depends(_get_store)) -> Store:
+    """Mutation-path variant of _get_store — 402s a billing-locked store.
+    See SPEC_SUBSCRIPTION.md §3.3."""
+    subscription_service.assert_billing_ok(store)
     return store
 
 
@@ -84,7 +92,7 @@ def get_active_flash_sale(inventory_id: UUID) -> Optional[FlashSale]:
 
 
 @flash_sale_apis.post("", response_model=FlashSaleResponse)
-async def create_flash_sale(payload: CreateFlashSalePayload, store: Store = Depends(_get_store)):
+async def create_flash_sale(payload: CreateFlashSalePayload, store: Store = Depends(_get_store_write)):
     if payload.end_at <= payload.start_at:
         raise HTTPException(status_code=400, detail="end_at must be after start_at")
     if payload.end_at <= datetime.utcnow():
@@ -135,7 +143,7 @@ async def list_active_flash_sales():
 
 
 @flash_sale_apis.delete("/{sale_id}", status_code=204)
-async def cancel_flash_sale(sale_id: UUID, store: Store = Depends(_get_store)):
+async def cancel_flash_sale(sale_id: UUID, store: Store = Depends(_get_store_write)):
     fs = db_session.exec(
         select(FlashSale).where(FlashSale.id == sale_id, FlashSale.store_id == store.id)
     ).first()

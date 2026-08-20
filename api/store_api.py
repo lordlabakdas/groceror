@@ -13,6 +13,7 @@ from models.entity.phone_verification import PhoneVerification
 from models.entity.store_entity import Store
 from models.entity.store_rating_entity import StoreRating
 from models.entity.user_entity import User
+from models.service import subscription_service
 from models.service.store_service import StoreService
 
 store_apis = APIRouter(prefix="/stores", tags=["stores"])
@@ -206,7 +207,9 @@ async def update_store(
     current_user: PhoneVerification = Depends(auth_required),
 ):
     store_service = StoreService()
-    _assert_owner(store_service.get_store(store_id), current_user)
+    store = store_service.get_store(store_id)
+    _assert_owner(store, current_user)
+    subscription_service.assert_billing_ok(store)
     return store_service.update_store(store_id, **store_data.model_dump(exclude_unset=True))
 
 

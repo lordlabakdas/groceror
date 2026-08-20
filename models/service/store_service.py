@@ -9,6 +9,7 @@ from sqlmodel import select
 from models.db import db_session
 from models.entity.phone_verification import PhoneVerification
 from models.entity.store_entity import Store
+from models.service import subscription_service
 
 
 class StoreService:
@@ -30,6 +31,16 @@ class StoreService:
             )
             db_session.add(store)
             db_session.commit()
+            db_session.refresh(store)
+            # Every store gets a trial Subscription immediately on creation,
+            # no separate signup step. See SPEC_SUBSCRIPTION.md §3.2.
+            subscription_service.create_trial_subscription(store.id)
+            # create_trial_subscription's own commit() expires every object
+            # in this (shared, thread-local) session by default, `store`
+            # included — its __dict__ goes empty until re-loaded, which
+            # FastAPI's response serialization won't trigger on its own
+            # (it reads __dict__, not the ORM's lazy-load descriptors), so
+            # without this the endpoint would silently return `{}`.
             db_session.refresh(store)
             return store
         except Exception as e:
@@ -97,8 +108,12 @@ class StoreService:
         return self.update_store(store_id, is_active=True)
 
     def get_all_active_stores(self) -> List[Store]:
+        # is_billing_locked is separate from is_active — a store that's
+        # paused (owner's own choice) or billing-locked (unpaid) is equally
+        # invisible to buyers, but the two flags mean different things.
+        # See SPEC_SUBSCRIPTION.md §3.1.
         return db_session.exec(
-            select(Store).where(Store.is_active == True)
+            select(Store).where(Store.is_active == True, Store.is_billing_locked == False)
         ).all()
 
     def search_stores(self, query: str) -> List[Store]:

@@ -18,8 +18,10 @@ from sqlmodel import select
 
 from api.sse_bus import publish as sse_publish
 from config import ShiprocketConfig
+from engine.billing import get_billing_provider
 from models.db import db_session
 from models.entity.orders_entity import Order as OrderEntity
+from models.service import subscription_service
 from models.service.delivery_service import DeliveryService
 
 logger = logging.getLogger(__name__)
@@ -78,4 +80,34 @@ async def shiprocket_quick_webhook(request: Request):
             {"order_id": str(delivery.order_id), "status": delivery.status},
         )
 
+    return {"received": True}
+
+
+# ── Razorpay subscriptions ──────────────────────────────────────────────────
+# UNVERIFIED: event names/payload shape are assumed from general knowledge of
+# Razorpay's Subscriptions product, not confirmed against real docs — see
+# SPEC_SUBSCRIPTION.md §3.4.
+
+
+@webhook_apis.post("/razorpay-subscription")
+async def razorpay_subscription_webhook(request: Request):
+    raw_body = await request.body()
+    signature = request.headers.get("X-Razorpay-Signature")
+    provider = get_billing_provider()
+
+    if not provider.verify_webhook_signature(raw_body, signature):
+        logger.warning("Rejected unverified Razorpay subscription webhook request")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid signature"
+        )
+
+    payload = await request.json()
+    try:
+        event = provider.parse_webhook(payload)
+    except (KeyError, TypeError):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Malformed webhook payload"
+        )
+
+    subscription_service.apply_webhook(event)
     return {"received": True}

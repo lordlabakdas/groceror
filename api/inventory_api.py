@@ -32,14 +32,28 @@ from models.entity.promotion_entity import Promotion
 from models.entity.stock_threshold_entity import StockThreshold
 from models.entity.store_entity import Store
 from models.entity.user_entity import User
+from models.service import subscription_service
 
 logger = logging.getLogger(__name__)
 inventory_apis = APIRouter(prefix="/inventory", tags=["inventory"])
 
 
+def _require_billing_ok(user: PhoneVerification = Depends(auth_required)) -> PhoneVerification:
+    """Mutation-path gate — 402s a billing-locked store. Checked at the
+    dependency layer, before the endpoint body runs, because several
+    endpoints below wrap their body in a bare `except Exception` that would
+    otherwise swallow an HTTPException(402) raised deeper inside
+    InventoryHelper and turn it into a generic 500. See
+    SPEC_SUBSCRIPTION.md §3.3."""
+    store = db_session.exec(select(Store).where(Store.entity_id == user.id)).first()
+    if store:
+        subscription_service.assert_billing_ok(store)
+    return user
+
+
 @inventory_apis.post("/add-inventory", response_model=AddInventoryResponse)
 async def add_inventory(
-    add_inventory_payload: AddInventoryPayload, user: PhoneVerification = Depends(auth_required)
+    add_inventory_payload: AddInventoryPayload, user: PhoneVerification = Depends(_require_billing_ok)
 ):
     logger.info(f"Adding inventory for user: {add_inventory_payload}")
     try:
@@ -82,7 +96,7 @@ async def get_store_inventory(
 async def set_stock_threshold(
     inventory_id: UUID,
     payload: SetThresholdPayload,
-    user: PhoneVerification = Depends(auth_required),
+    user: PhoneVerification = Depends(_require_billing_ok),
 ):
     helper = InventoryHelper(user=user)
     try:
@@ -113,7 +127,7 @@ async def set_stock_threshold(
 async def set_inventory_expiry(
     inventory_id: UUID,
     payload: SetExpiryPayload,
-    user: PhoneVerification = Depends(auth_required),
+    user: PhoneVerification = Depends(_require_billing_ok),
 ):
     helper = InventoryHelper(user=user)
     try:
@@ -146,7 +160,7 @@ async def set_inventory_expiry(
 async def set_promotion(
     inventory_id: UUID,
     payload: SetPromotionPayload,
-    user: PhoneVerification = Depends(auth_required),
+    user: PhoneVerification = Depends(_require_billing_ok),
 ):
     helper = InventoryHelper(user=user)
     try:
@@ -182,7 +196,7 @@ async def set_promotion(
 @inventory_apis.delete("/{inventory_id}/promotion", response_model=UpdateInventoryResponse)
 async def delete_promotion(
     inventory_id: UUID,
-    user: PhoneVerification = Depends(auth_required),
+    user: PhoneVerification = Depends(_require_billing_ok),
 ):
     helper = InventoryHelper(user=user)
     try:
@@ -207,7 +221,7 @@ async def delete_promotion(
 async def update_inventory(
     inventory_id: UUID,
     payload: UpdateInventoryPayload,
-    user: PhoneVerification = Depends(auth_required),
+    user: PhoneVerification = Depends(_require_billing_ok),
 ):
     try:
         inventory_helper_obj = InventoryHelper(user=user)
@@ -330,7 +344,7 @@ async def browse_store_inventory(
 @inventory_apis.delete("/delete-inventory", response_model=DeleteInventoryResponse)
 async def delete_inventory(
     items: Optional[List[str]] = Query(default=None),
-    user: User = Depends(auth_required),
+    user: PhoneVerification = Depends(_require_billing_ok),
 ):
     logger.info(f"Deleting inventory for user: {user.phone}")
     try:

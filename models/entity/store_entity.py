@@ -19,6 +19,10 @@ class Store(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     is_active: bool = Field(default=True)
     is_verified: bool = Field(default=False)
+    # Billing-driven, distinct from is_active (§3.1, SPEC_SUBSCRIPTION.md) —
+    # is_active is the owner's own pause switch; this is set/cleared only by
+    # subscription_service, so the two can't clobber each other.
+    is_billing_locked: bool = Field(default=False)
     latitude: Optional[float] = Field(default=None)
     longitude: Optional[float] = Field(default=None)
 

@@ -107,3 +107,18 @@ class ShiprocketConfig(object):
     BASE_URL: ClassVar[str] = _env(
         "SHIPROCKET_BASE_URL", "https://api.shiprocket.in/quick/v1"
     )
+
+
+@dataclass
+class RazorpayConfig(object):
+    """Razorpay Subscriptions configuration — credentials only, not the
+    price (that's SubscriptionPlan, a DB row an admin can change; see
+    SPEC_SUBSCRIPTION.md §3.1, §3.5).
+
+    NOTE: unverified against real Razorpay docs/account — see
+    SPEC_SUBSCRIPTION.md §3.4. Adjust once real credentials are in hand.
+    """
+
+    KEY_ID: ClassVar[str] = _env("RAZORPAY_KEY_ID")
+    KEY_SECRET: ClassVar[str] = _env("RAZORPAY_KEY_SECRET")
+    WEBHOOK_SECRET: ClassVar[str] = _env("RAZORPAY_WEBHOOK_SECRET")

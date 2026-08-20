@@ -399,14 +399,23 @@ def test_update_order_status_updates_and_commits():
 def test_store_service_create_store_success():
     from models.service.store_service import StoreService
 
-    with patch("models.service.store_service.db_session") as mock_db:
+    with patch("models.service.store_service.db_session") as mock_db, patch(
+        "models.service.store_service.subscription_service.create_trial_subscription"
+    ) as mock_create_trial:
         store = StoreService().create_store(
             name="Test Store", entity_id=uuid4(), email="t@example.com",
             website="https://x.test", location="Somewhere",
         )
         mock_db.add.assert_called_once()
         mock_db.commit.assert_called_once()
-        mock_db.refresh.assert_called_once()
+        # Called twice: once after the Store insert, once more after
+        # create_trial_subscription — its own commit() expires every
+        # object in the shared session (store included), so a second
+        # refresh is needed before this function can safely return `store`
+        # for FastAPI to serialize. See SPEC_SUBSCRIPTION.md §3.2 and the
+        # comment in StoreService.create_store().
+        assert mock_db.refresh.call_count == 2
+        mock_create_trial.assert_called_once_with(store.id)
         assert store.name == "Test Store"
         assert store.email == "t@example.com"
 

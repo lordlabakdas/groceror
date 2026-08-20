@@ -12,6 +12,7 @@ from models.db import db_session
 from models.entity.coupon_entity import Coupon
 from models.entity.phone_verification import PhoneVerification
 from models.entity.store_entity import Store
+from models.service import subscription_service
 
 logger = logging.getLogger(__name__)
 coupon_apis = APIRouter(prefix="/coupons", tags=["coupons"])
@@ -23,6 +24,14 @@ def _get_store(entity: PhoneVerification = Depends(auth_required)) -> Store:
     store = db_session.exec(select(Store).where(Store.entity_id == entity.id)).first()
     if not store:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Store profile not set")
+    return store
+
+
+def _get_store_write(store: Store = Depends(_get_store)) -> Store:
+    """Mutation-path variant of _get_store — 402s a billing-locked store.
+    Read endpoints keep using _get_store directly and stay open.
+    See SPEC_SUBSCRIPTION.md §3.3."""
+    subscription_service.assert_billing_ok(store)
     return store
 
 
@@ -60,7 +69,7 @@ class ValidateCouponResponse(BaseModel):
 
 
 @coupon_apis.post("", response_model=CouponResponse, status_code=status.HTTP_201_CREATED)
-async def create_coupon(payload: CreateCouponPayload, store: Store = Depends(_get_store)):
+async def create_coupon(payload: CreateCouponPayload, store: Store = Depends(_get_store_write)):
     code = payload.code.strip().upper()
     if not code:
         raise HTTPException(status_code=400, detail="Coupon code cannot be empty")
@@ -98,7 +107,7 @@ async def list_coupons(store: Store = Depends(_get_store)):
 
 
 @coupon_apis.delete("/{code}", status_code=status.HTTP_204_NO_CONTENT)
-async def deactivate_coupon(code: str, store: Store = Depends(_get_store)):
+async def deactivate_coupon(code: str, store: Store = Depends(_get_store_write)):
     coupon = db_session.exec(
         select(Coupon).where(Coupon.code == code.upper(), Coupon.store_id == store.id)
     ).first()

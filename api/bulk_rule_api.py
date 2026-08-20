@@ -14,6 +14,7 @@ from models.entity.bulk_rule_item_entity import BulkRuleItem
 from models.entity.inventory_entity import Inventory
 from models.entity.phone_verification import PhoneVerification
 from models.entity.store_entity import Store
+from models.service import subscription_service
 
 bulk_rule_apis = APIRouter(prefix="/bulk-rules", tags=["bulk-rules"])
 
@@ -24,6 +25,13 @@ async def _get_store(entity: PhoneVerification = Depends(auth_required)) -> Stor
     store = db_session.exec(select(Store).where(Store.entity_id == entity.id)).first()
     if not store:
         raise HTTPException(status_code=400, detail="Store profile not set")
+    return store
+
+
+async def _get_store_write(store: Store = Depends(_get_store)) -> Store:
+    """Mutation-path variant of _get_store — 402s a billing-locked store.
+    See SPEC_SUBSCRIPTION.md §3.3."""
+    subscription_service.assert_billing_ok(store)
     return store
 
 
@@ -97,7 +105,7 @@ def _build_response(rule: BulkRule) -> BulkRuleResponse:
 # ── Endpoints ────────────────────────────────────────────────────────────────
 
 @bulk_rule_apis.post("/bxgf", response_model=BulkRuleResponse)
-async def create_bxgf(payload: CreateBXGFPayload, store: Store = Depends(_get_store)):
+async def create_bxgf(payload: CreateBXGFPayload, store: Store = Depends(_get_store_write)):
     inv = db_session.exec(
         select(Inventory).where(Inventory.id == payload.inventory_id, Inventory.store_id == store.id)
     ).first()
@@ -119,7 +127,7 @@ async def create_bxgf(payload: CreateBXGFPayload, store: Store = Depends(_get_st
 
 
 @bulk_rule_apis.post("/bundle", response_model=BulkRuleResponse)
-async def create_bundle(payload: CreateBundlePayload, store: Store = Depends(_get_store)):
+async def create_bundle(payload: CreateBundlePayload, store: Store = Depends(_get_store_write)):
     for iid in payload.inventory_ids:
         inv = db_session.exec(
             select(Inventory).where(Inventory.id == iid, Inventory.store_id == store.id)
@@ -162,7 +170,7 @@ async def list_store_rules(store_id: UUID):
 
 
 @bulk_rule_apis.delete("/{rule_id}", status_code=204)
-async def deactivate_rule(rule_id: UUID, store: Store = Depends(_get_store)):
+async def deactivate_rule(rule_id: UUID, store: Store = Depends(_get_store_write)):
     rule = db_session.exec(
         select(BulkRule).where(BulkRule.id == rule_id, BulkRule.store_id == store.id)
     ).first()

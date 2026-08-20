@@ -52,6 +52,19 @@ class CancelResponse(BaseModel):
     effective_at: Optional[datetime]
 
 
+class InvoiceItem(BaseModel):
+    id: UUID
+    amount_paise: int
+    status: str
+    period_start: datetime
+    period_end: datetime
+    paid_at: Optional[datetime]
+
+
+class InvoicesResponse(BaseModel):
+    invoices: List[InvoiceItem]
+
+
 class AdminSubscriptionRow(BaseModel):
     store_id: UUID
     store_name: str
@@ -97,6 +110,24 @@ async def start_checkout(store: Store = Depends(_get_store)):
     return CheckoutResponse(
         razorpay_subscription_id=sub.razorpay_subscription_id,
         razorpay_key_id=RazorpayConfig.KEY_ID,
+    )
+
+
+@subscription_apis.get("/invoices", response_model=InvoicesResponse)
+async def list_invoices(store: Store = Depends(_get_store)):
+    invoices = subscription_service.list_invoices(store.id)
+    return InvoicesResponse(
+        invoices=[
+            InvoiceItem(
+                id=inv.id,
+                amount_paise=inv.amount_paise,
+                status=inv.status,
+                period_start=inv.period_start,
+                period_end=inv.period_end,
+                paid_at=inv.paid_at,
+            )
+            for inv in invoices
+        ]
     )
 
 

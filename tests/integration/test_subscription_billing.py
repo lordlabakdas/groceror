@@ -113,6 +113,13 @@ class TestCheckoutAndWebhook:
         assert r.json()["status"] == "active"
         assert r.json()["plan_price_paise"] == 99900
 
+        r = client.get("/subscription/invoices", headers=_headers(token))
+        assert r.status_code == 200, r.text
+        invoices = r.json()["invoices"]
+        assert len(invoices) == 1
+        assert invoices[0]["amount_paise"] == 99900
+        assert invoices[0]["status"] == "paid"
+
     def test_webhook_rejected_without_valid_signature(self):
         fake_provider = FakeBillingProvider()
         with patch("api.webhook_api.get_billing_provider", return_value=fake_provider):

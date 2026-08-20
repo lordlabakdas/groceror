@@ -299,6 +299,15 @@ def apply_webhook(event: SubscriptionWebhookEvent) -> Optional[Subscription]:
     return sub
 
 
+def list_invoices(store_id: UUID) -> list[SubscriptionInvoice]:
+    sub = _get_subscription(store_id)
+    return db_session.exec(
+        select(SubscriptionInvoice)
+        .where(SubscriptionInvoice.subscription_id == sub.id)
+        .order_by(SubscriptionInvoice.created_at.desc())
+    ).all()
+
+
 def admin_list() -> dict:
     rows = db_session.exec(select(Subscription, Store).where(Subscription.store_id == Store.id)).all()
     subscriptions = [

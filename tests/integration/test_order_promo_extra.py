@@ -755,6 +755,12 @@ class TestFlashSaleLifecycle:
         assert fs_sale["is_live"] is True
         assert fs_sale["seconds_remaining"] is not None
         assert fs_sale["seconds_remaining"] > 0
+        # start_at/end_at must be tz-aware (UTC offset present) so a JS
+        # `new Date(...)` on the receiving end doesn't misparse them as
+        # local time — regression test for the grocer/shopper countdown
+        # mismatch, which was caused by naive timestamps in the response.
+        assert fs_sale["end_at"].endswith("+00:00") or fs_sale["end_at"].endswith("Z")
+        assert fs_sale["start_at"].endswith("+00:00") or fs_sale["start_at"].endswith("Z")
 
     def test_create_accepts_tz_aware_timestamps(self, fs_store_token, fs_store_profile, fs_inventory_id):
         # The real frontend sends `Date.toISOString()`, which is tz-aware
@@ -837,6 +843,113 @@ class TestFlashSaleLifecycle:
         r4 = client.get("/flash-sales/store", headers=_headers(fs_store_token))
         assert r4.status_code == 200
         assert all(s["id"] != sale_id for s in r4.json())
+
+
+class TestFlashSaleCartPricing:
+    """A shopper adding a flash-sale item to their cart must be charged the
+    sale price, and can't override it by sending a different `price` in the
+    request body — the server derives price server-side, never trusting the
+    client. Regression coverage for the bug where cart items were always
+    added at the regular price, and for the price-tampering hole that let a
+    client set any price it wanted."""
+
+    def test_add_to_cart_uses_flash_sale_price_not_client_price(
+        self, fs_store_token, fs_store_profile, promo_user_token, promo_user_profile
+    ):
+        r = client.post(
+            "/inventory/add-inventory",
+            json={"name": "Cart Pricing Item", "quantity": 20, "category": "OTHER", "price": 10.0},
+            headers=_headers(fs_store_token),
+        )
+        assert r.status_code == 200, r.text
+        inv_id = r.json()["inventory_id"]
+
+        store_id = client.get("/stores/my-stores", headers=_headers(fs_store_token)).json()[0]["id"]
+
+        now = datetime.utcnow()
+        fs_payload = {
+            "inventory_id": inv_id,
+            "sale_price": 4.0,
+            "start_at": (now - timedelta(minutes=1)).isoformat(),
+            "end_at": (now + timedelta(hours=1)).isoformat(),
+        }
+        r2 = client.post("/flash-sales", json=fs_payload, headers=_headers(fs_store_token))
+        assert r2.status_code == 200, r2.text
+
+        # Client sends a bogus price far below even the sale price — server
+        # must ignore it and use the real flash-sale price (4.0), not the
+        # regular price (10.0) and not the client's number (0.01).
+        r3 = client.post(
+            f"/cart/{store_id}/items",
+            json={"inventory_id": inv_id, "quantity": 2, "price": 0.01},
+            headers=_headers(promo_user_token),
+        )
+        assert r3.status_code == 201, r3.text
+        assert r3.json()["price"] == 4.0
+
+        total = client.get(f"/cart/{store_id}/total", headers=_headers(promo_user_token)).json()
+        assert total["total_price"] == 8.0  # 2 * 4.0, not 2 * 10.0 or 2 * 0.01
+
+    def test_update_cart_item_cannot_override_price(
+        self, fs_store_token, fs_store_profile, promo_user_token, promo_user_profile
+    ):
+        r = client.post(
+            "/inventory/add-inventory",
+            json={"name": "No Sale Item", "quantity": 20, "category": "OTHER", "price": 7.0},
+            headers=_headers(fs_store_token),
+        )
+        assert r.status_code == 200, r.text
+        inv_id = r.json()["inventory_id"]
+        store_id = client.get("/stores/my-stores", headers=_headers(fs_store_token)).json()[0]["id"]
+
+        r2 = client.post(
+            f"/cart/{store_id}/items",
+            json={"inventory_id": inv_id, "quantity": 1, "price": 7.0},
+            headers=_headers(promo_user_token),
+        )
+        assert r2.status_code == 201, r2.text
+        item_id = r2.json()["id"]
+
+        r3 = client.put(
+            f"/cart/{store_id}/items/{item_id}",
+            json={"quantity": 3, "price": 0.01},
+            headers=_headers(promo_user_token),
+        )
+        assert r3.status_code == 200, r3.text
+        assert r3.json()["price"] == 7.0
+        assert r3.json()["quantity"] == 3
+
+    def test_browse_flash_sale_end_at_is_tz_aware(
+        self, fs_store_token, fs_store_profile, promo_user_token, promo_user_profile
+    ):
+        """Regression test for the grocer/shopper countdown mismatch: the
+        shopper-facing browse endpoint must serialize flash_sale_end_at with
+        a UTC offset, same as /flash-sales/store, so both sides parse the
+        same instant instead of one side misreading it as local time."""
+        r = client.post(
+            "/inventory/add-inventory",
+            json={"name": "Browse Countdown Item", "quantity": 5, "category": "OTHER", "price": 12.0},
+            headers=_headers(fs_store_token),
+        )
+        assert r.status_code == 200, r.text
+        inv_id = r.json()["inventory_id"]
+        store_id = client.get("/stores/my-stores", headers=_headers(fs_store_token)).json()[0]["id"]
+
+        now = datetime.utcnow()
+        fs_payload = {
+            "inventory_id": inv_id,
+            "sale_price": 6.0,
+            "start_at": (now - timedelta(minutes=1)).isoformat(),
+            "end_at": (now + timedelta(hours=1)).isoformat(),
+        }
+        r2 = client.post("/flash-sales", json=fs_payload, headers=_headers(fs_store_token))
+        assert r2.status_code == 200, r2.text
+
+        r3 = client.get(f"/inventory/browse/{store_id}", headers=_headers(promo_user_token))
+        assert r3.status_code == 200, r3.text
+        item = next(i for i in r3.json()["inventory"] if i["id"] == inv_id)
+        assert item["flash_sale_price"] == 6.0
+        assert item["flash_sale_end_at"].endswith("+00:00") or item["flash_sale_end_at"].endswith("Z")
 
 
 # ─────────────────────────────────────────────────────────────────────────────

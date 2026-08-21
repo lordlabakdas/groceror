@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from typing import List
 from uuid import UUID
 
@@ -9,7 +9,37 @@ from models.db import db_session
 from models.entity.cart_entity import CartEntity
 from models.entity.cart_item_entity import CartItemEntity
 from models.entity.inventory_entity import Inventory
+from models.entity.promotion_entity import Promotion
 from models.entity.user_entity import User
+
+
+def _resolve_effective_price(inventory: Inventory) -> float:
+    """The price a shopper actually pays right now for this item.
+
+    Never trust a client-supplied price for a cart line — CartItemCreate.price
+    exists in the request schema, but honoring it let a shopper add an item
+    at any price they chose to send, and separately caused the cart to show
+    the regular price for flash-sale items regardless of what the item was
+    actually discounted to. Same precedence as the display logic on the
+    shopper browse page: flash sale first, then a running promotion, then
+    the regular price."""
+    from api.flash_sale_api import get_active_flash_sale
+
+    fs = get_active_flash_sale(inventory.id)
+    if fs:
+        return fs.sale_price
+
+    promo = db_session.exec(
+        select(Promotion).where(
+            Promotion.inventory_id == inventory.id,
+            Promotion.start_date <= date.today(),
+            Promotion.end_date >= date.today(),
+        )
+    ).first()
+    if promo:
+        return promo.sale_price
+
+    return inventory.price
 
 
 class CartService:
@@ -57,7 +87,9 @@ class CartService:
                 )
 
             cart = self.get_active_cart(store_id)
-            cart_item = CartItemEntity(cart_id=cart.id, **item_data.model_dump())
+            data = item_data.model_dump()
+            data["price"] = _resolve_effective_price(inventory)
+            cart_item = CartItemEntity(cart_id=cart.id, **data)
             db_session.add(cart_item)
 
             cart.total_quantity += cart_item.quantity
@@ -102,15 +134,25 @@ class CartService:
                     status_code=status.HTTP_404_NOT_FOUND, detail="Cart item not found"
                 )
 
-            if item_data.quantity is not None:
-                cart.total_quantity += item_data.quantity - cart_item.quantity
-                cart.total_price += cart_item.price * (
-                    item_data.quantity - cart_item.quantity
-                )
+            old_quantity = cart_item.quantity
+            old_price = cart_item.price
+            new_quantity = item_data.quantity if item_data.quantity is not None else old_quantity
 
-            for key, value in item_data.model_dump(exclude_unset=True).items():
+            # price is never client-settable (see _resolve_effective_price) —
+            # re-derive it fresh instead, so a quantity update also picks up
+            # a flash sale that started/ended since the item was added.
+            inventory = db_session.exec(
+                select(Inventory).where(Inventory.id == cart_item.inventory_id)
+            ).first()
+            new_price = _resolve_effective_price(inventory) if inventory else old_price
+
+            for key, value in item_data.model_dump(exclude_unset=True, exclude={"price"}).items():
                 setattr(cart_item, key, value)
+            cart_item.price = new_price
             cart_item.updated_at = datetime.utcnow()
+
+            cart.total_quantity += new_quantity - old_quantity
+            cart.total_price += (new_quantity * new_price) - (old_quantity * old_price)
             cart.updated_at = datetime.utcnow()
 
             db_session.commit()

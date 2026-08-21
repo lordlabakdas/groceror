@@ -288,7 +288,7 @@ async def search_inventory(
     else:
         promo_map = {}
 
-    from api.flash_sale_api import get_active_flash_sale
+    from api.flash_sale_api import get_active_flash_sale, _aware_utc
     search_results = []
     for item in visible:
         fs = get_active_flash_sale(item.id)
@@ -304,7 +304,7 @@ async def search_inventory(
             store_name=store_map[item.store_id],
             sale_price=promo_map.get(item.id),
             flash_sale_price=fs.sale_price if fs else None,
-            flash_sale_end_at=fs.end_at if fs else None,
+            flash_sale_end_at=_aware_utc(fs.end_at) if fs else None,
         ))
     return SearchResponse(query=q, results=search_results)
 
@@ -317,7 +317,7 @@ async def browse_store_inventory(
     items = db_session.exec(
         select(Inventory).where(Inventory.store_id == store_id)
     ).all()
-    from api.flash_sale_api import get_active_flash_sale
+    from api.flash_sale_api import get_active_flash_sale, _aware_utc
     if items:
         promos = db_session.exec(
             select(Promotion).where(
@@ -336,7 +336,7 @@ async def browse_store_inventory(
             **item.to_dict(),
             sale_price=promo_map.get(item.id),
             flash_sale_price=fs.sale_price if fs else None,
-            flash_sale_end_at=fs.end_at if fs else None,
+            flash_sale_end_at=_aware_utc(fs.end_at) if fs else None,
         ))
     return StoreInventoryResponse(inventory=result)
 
@@ -383,7 +383,7 @@ class TrendingItem(BaseModel):
 async def get_trending(limit: int = Query(default=10, le=50)):
     from models.entity.order_item_entity import OrderItem
     from models.entity.orders_entity import Order as OrderEntity
-    from api.flash_sale_api import get_active_flash_sale
+    from api.flash_sale_api import get_active_flash_sale, _aware_utc
 
     cutoff = datetime.utcnow() - timedelta(days=7)
 
@@ -439,7 +439,7 @@ async def get_trending(limit: int = Query(default=10, le=50)):
             store_name=store.name,
             sale_price=promo_map.get(inv.id),
             flash_sale_price=fs.sale_price if fs else None,
-            flash_sale_end_at=fs.end_at if fs else None,
+            flash_sale_end_at=_aware_utc(fs.end_at) if fs else None,
             order_count=count,
             is_verified_store=store.is_verified,
         ))

@@ -65,6 +65,22 @@ def _to_naive_utc(dt: datetime) -> datetime:
     return dt
 
 
+def _aware_utc(dt: Optional[datetime]) -> Optional[datetime]:
+    """Attach UTC tzinfo before a naive DB timestamp is serialized to JSON.
+
+    Every stored FlashSale timestamp is naive-UTC (see _to_naive_utc). Left
+    naive, Pydantic serializes it without a 'Z'/offset suffix, and `new
+    Date(...)` on the receiving end parses that as LOCAL time, not UTC —
+    silently skewing any client-side countdown by the viewer's UTC offset.
+    That's why the grocer's flash-sales page (which uses the server's
+    precomputed seconds_remaining) and the shopper's browse page (which
+    recomputed a countdown from end_at) used to show different timers for
+    the same sale."""
+    if dt is None or dt.tzinfo is not None:
+        return dt
+    return dt.replace(tzinfo=timezone.utc)
+
+
 def _enrich(fs: FlashSale) -> Optional[FlashSaleResponse]:
     inv = db_session.exec(select(Inventory).where(Inventory.id == fs.inventory_id)).first()
     if not inv:
@@ -79,12 +95,12 @@ def _enrich(fs: FlashSale) -> Optional[FlashSaleResponse]:
         store_id=fs.store_id,
         sale_price=fs.sale_price,
         original_price=inv.price,
-        start_at=fs.start_at,
-        end_at=fs.end_at,
+        start_at=_aware_utc(fs.start_at),
+        end_at=_aware_utc(fs.end_at),
         is_active=fs.is_active,
         is_live=is_live,
         seconds_remaining=secs,
-        created_at=fs.created_at,
+        created_at=_aware_utc(fs.created_at),
     )
 
 

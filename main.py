@@ -66,13 +66,17 @@ app.add_middleware(
 
 @app.middleware("http")
 async def close_db_session(request, call_next):
-    """Return every thread-local DB session to the pool after each request.
+    """Return this request's thread-local DB session to the pool.
 
-    FastAPI runs synchronous dependencies in thread-pool workers.  Each worker
-    thread acquires its own SQLAlchemy session (via _ThreadLocalSessionProxy).
-    Without explicit cleanup those sessions hold connections open indefinitely,
-    exhausting the pool.  This middleware closes the session for the current
-    thread after the response is sent.
+    This middleware itself always runs on the event-loop thread (it's
+    `async def` with no sync work of its own), so `db_session.remove()`
+    here only ever reaches a session created ON THAT SAME THREAD. A `def`
+    (non-async) route or Depends() callable gets dispatched by FastAPI to a
+    *different* worker thread via run_in_threadpool — any DB session it
+    creates via _ThreadLocalSessionProxy is invisible to this middleware
+    and leaks its connection permanently (never returned to the pool).
+    That's why every Depends() callable that touches db_session must be
+    `async def`, even though its body is plain synchronous ORM code.
     """
     try:
         response = await call_next(request)

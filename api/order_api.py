@@ -40,7 +40,7 @@ logger = logging.getLogger(__name__)
 order_apis = APIRouter(prefix="/order", tags=["order"])
 
 
-def _get_store_profile(entity: PhoneVerification = Depends(auth_required)) -> Store:
+async def _get_store_profile(entity: PhoneVerification = Depends(auth_required)) -> Store:
     if entity.entity_type != "store":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Store access only")
     store = db_session.exec(select(Store).where(Store.entity_id == entity.id)).first()
@@ -52,7 +52,7 @@ def _get_store_profile(entity: PhoneVerification = Depends(auth_required)) -> St
     return store
 
 
-def _get_user_profile(entity: PhoneVerification = Depends(auth_required)) -> User:
+async def _get_user_profile(entity: PhoneVerification = Depends(auth_required)) -> User:
     user = db_session.exec(select(User).where(User.entity_id == entity.id)).first()
     if not user:
         raise HTTPException(

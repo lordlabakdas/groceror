@@ -38,7 +38,7 @@ logger = logging.getLogger(__name__)
 inventory_apis = APIRouter(prefix="/inventory", tags=["inventory"])
 
 
-def _require_billing_ok(user: PhoneVerification = Depends(auth_required)) -> PhoneVerification:
+async def _require_billing_ok(user: PhoneVerification = Depends(auth_required)) -> PhoneVerification:
     """Mutation-path gate — 402s a billing-locked store. Checked at the
     dependency layer, before the endpoint body runs, because several
     endpoints below wrap their body in a bare `except Exception` that would

@@ -18,7 +18,7 @@ test_platform.py or any other test module -- each fixture builds its own
 user/store/inventory graph.
 """
 import uuid
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from unittest.mock import patch
 
 import pytest
@@ -755,6 +755,24 @@ class TestFlashSaleLifecycle:
         assert fs_sale["is_live"] is True
         assert fs_sale["seconds_remaining"] is not None
         assert fs_sale["seconds_remaining"] > 0
+
+    def test_create_accepts_tz_aware_timestamps(self, fs_store_token, fs_store_profile, fs_inventory_id):
+        # The real frontend sends `Date.toISOString()`, which is tz-aware
+        # (UTC, 'Z'-suffixed) — unlike this file's other fixtures, which use
+        # naive `datetime.utcnow().isoformat()`. Regression test for a prod
+        # bug where comparing an aware end_at against naive datetime.utcnow()
+        # raised TypeError and 500'd every real-world creation.
+        now = datetime.now(timezone.utc)
+        payload = {
+            "inventory_id": fs_inventory_id,
+            "sale_price": 6.0,
+            "start_at": now.isoformat(),
+            "end_at": (now + timedelta(hours=2)).isoformat(),
+        }
+        assert payload["end_at"].endswith("+00:00")
+        r = client.post("/flash-sales", json=payload, headers=_headers(fs_store_token))
+        assert r.status_code == 200, r.text
+        assert r.json()["is_live"] is True
 
     def test_list_store_flash_sales(self, fs_store_token, fs_sale):
         r = client.get("/flash-sales/store", headers=_headers(fs_store_token))

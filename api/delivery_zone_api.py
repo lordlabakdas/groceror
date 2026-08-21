@@ -30,7 +30,7 @@ def _haversine(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     return 2 * EARTH_RADIUS_KM * asin(sqrt(a))
 
 
-def _get_store(entity: PhoneVerification = Depends(auth_required)) -> Store:
+async def _get_store(entity: PhoneVerification = Depends(auth_required)) -> Store:
     if entity.entity_type != "store":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Store access only")
     store = db_session.exec(select(Store).where(Store.entity_id == entity.id)).first()
@@ -39,7 +39,7 @@ def _get_store(entity: PhoneVerification = Depends(auth_required)) -> Store:
     return store
 
 
-def _get_store_write(store: Store = Depends(_get_store)) -> Store:
+async def _get_store_write(store: Store = Depends(_get_store)) -> Store:
     """Mutation-path variant of _get_store — 402s a billing-locked store.
     See SPEC_SUBSCRIPTION.md §3.3."""
     subscription_service.assert_billing_ok(store)

@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 subscription_apis = APIRouter(prefix="/subscription", tags=["subscription"])
 
 
-def _get_store(entity: PhoneVerification = Depends(auth_required)) -> Store:
+async def _get_store(entity: PhoneVerification = Depends(auth_required)) -> Store:
     if entity.entity_type != "store":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Store access only")
     store = db_session.exec(select(Store).where(Store.entity_id == entity.id)).first()

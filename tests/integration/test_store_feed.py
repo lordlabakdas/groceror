@@ -276,6 +276,18 @@ class TestFeed:
         assert data["items"] == []
         assert data["unread_count"] == 0
 
+    def test_feed_item_created_at_is_tz_aware(self, feed_user_token, feed_followed):
+        """Regression test: created_at must serialize with a UTC offset, same
+        as flash_sale_api.py's end_at (see its _aware_utc docstring) — left
+        naive, the frontend's `new Date(...)` misreads it as local time and
+        the feed shows timestamps in the future."""
+        r = client.get("/feed", headers=_headers(feed_user_token))
+        assert r.status_code == 200, r.text
+        items = r.json()["items"]
+        assert len(items) > 0
+        for item in items:
+            assert item["created_at"].endswith("+00:00") or item["created_at"].endswith("Z")
+
     def test_feed_shows_followed_store_activity(self, feed_user_token, feed_store_id, feed_followed):
         r = client.get("/feed", headers=_headers(feed_user_token))
         assert r.status_code == 200, r.text

@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional
 from uuid import UUID
 
@@ -68,6 +68,14 @@ def _clamp_limit(limit: int) -> int:
     return max(1, min(limit, 100))
 
 
+def _aware_utc(dt: datetime) -> datetime:
+    """StoreFeedPost.created_at is stored naive-UTC (default_factory=datetime.utcnow).
+    Left naive, Pydantic serializes it without a 'Z'/offset suffix and the
+    frontend's `new Date(...)` parses that as local time — see the identical
+    fix/rationale in flash_sale_api.py's _aware_utc."""
+    return dt if dt.tzinfo is not None else dt.replace(tzinfo=timezone.utc)
+
+
 @store_feed_apis.get("/feed", response_model=FeedResponse)
 async def get_feed(
     limit: int = Query(20),
@@ -85,7 +93,7 @@ async def get_feed(
             update_type=row["post"].update_type,
             message=row["post"].message,
             ref_id=row["post"].ref_id,
-            created_at=row["post"].created_at,
+            created_at=_aware_utc(row["post"].created_at),
         )
         for row in rows
     ]
@@ -107,7 +115,7 @@ async def post_announcement(payload: PostAnnouncementPayload, store: Store = Dep
     return FeedItemResponse(
         id=post.id, store_id=store.id, store_name=store.name,
         update_type=post.update_type, message=post.message,
-        ref_id=post.ref_id, created_at=post.created_at,
+        ref_id=post.ref_id, created_at=_aware_utc(post.created_at),
     )
 
 
@@ -151,7 +159,7 @@ async def list_store_updates(
         FeedItemResponse(
             id=p.id, store_id=store.id, store_name=store.name,
             update_type=p.update_type, message=p.message,
-            ref_id=p.ref_id, created_at=p.created_at,
+            ref_id=p.ref_id, created_at=_aware_utc(p.created_at),
         )
         for p in posts
     ]

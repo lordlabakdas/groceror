@@ -32,7 +32,7 @@ from models.entity.promotion_entity import Promotion
 from models.entity.stock_threshold_entity import StockThreshold
 from models.entity.store_entity import Store
 from models.entity.user_entity import User
-from models.service import subscription_service
+from models.service import store_feed_service, subscription_service
 
 logger = logging.getLogger(__name__)
 inventory_apis = APIRouter(prefix="/inventory", tags=["inventory"])
@@ -182,14 +182,22 @@ async def set_promotion(
         existing.start_date = payload.start_date
         existing.end_date = payload.end_date
         existing.updated_at = datetime.utcnow()
+        db_session.commit()
     else:
-        db_session.add(Promotion(
+        promotion = Promotion(
             inventory_id=inventory_id,
             sale_price=payload.sale_price,
             start_date=payload.start_date,
             end_date=payload.end_date,
-        ))
-    db_session.commit()
+        )
+        db_session.add(promotion)
+        db_session.commit()
+        db_session.refresh(promotion)
+        store_feed_service.emit_update(
+            store.id, "promotion",
+            f"{item.name} on sale for ${payload.sale_price:g} through {payload.end_date}",
+            ref_id=promotion.id,
+        )
     return {"status": "success"}
 
 

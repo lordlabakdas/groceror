@@ -12,7 +12,7 @@ from models.entity.flash_sale_entity import FlashSale
 from models.entity.inventory_entity import Inventory
 from models.entity.phone_verification import PhoneVerification
 from models.entity.store_entity import Store
-from models.service import subscription_service
+from models.service import store_feed_service, subscription_service
 
 flash_sale_apis = APIRouter(prefix="/flash-sales", tags=["flash-sales"])
 
@@ -144,6 +144,12 @@ async def create_flash_sale(payload: CreateFlashSalePayload, store: Store = Depe
     db_session.add(fs)
     db_session.commit()
     db_session.refresh(fs)
+
+    store_feed_service.emit_update(
+        store.id, "flash_sale",
+        f"⚡ Flash sale: {inv.name} now ${payload.sale_price:g} until {end_at.strftime('%-I:%M %p')}",
+        ref_id=fs.id,
+    )
     return _enrich(fs)
 
 

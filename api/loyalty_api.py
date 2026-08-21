@@ -22,7 +22,7 @@ loyalty_apis = APIRouter(prefix="/loyalty", tags=["loyalty"])
 POINTS_PER_DOLLAR_REDEMPTION = 100
 
 
-def _get_user(entity: PhoneVerification = Depends(auth_required)) -> User:
+async def _get_user(entity: PhoneVerification = Depends(auth_required)) -> User:
     user = db_session.exec(select(User).where(User.entity_id == entity.id)).first()
     if not user:
         raise HTTPException(status_code=400, detail="User profile not set. Call /user/set-profile first.")

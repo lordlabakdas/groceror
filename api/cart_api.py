@@ -27,7 +27,7 @@ class CartItemUpdate(BaseModel):
     notes: Optional[str] = None
 
 
-def _get_user_profile(entity: PhoneVerification = Depends(auth_required)) -> User:
+async def _get_user_profile(entity: PhoneVerification = Depends(auth_required)) -> User:
     """Resolve the User profile for the authenticated entity.
 
     Cart operations reference User.id (the profile table), so we need the

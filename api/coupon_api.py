@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 coupon_apis = APIRouter(prefix="/coupons", tags=["coupons"])
 
 
-def _get_store(entity: PhoneVerification = Depends(auth_required)) -> Store:
+async def _get_store(entity: PhoneVerification = Depends(auth_required)) -> Store:
     if entity.entity_type != "store":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Store access only")
     store = db_session.exec(select(Store).where(Store.entity_id == entity.id)).first()
@@ -27,7 +27,7 @@ def _get_store(entity: PhoneVerification = Depends(auth_required)) -> Store:
     return store
 
 
-def _get_store_write(store: Store = Depends(_get_store)) -> Store:
+async def _get_store_write(store: Store = Depends(_get_store)) -> Store:
     """Mutation-path variant of _get_store — 402s a billing-locked store.
     Read endpoints keep using _get_store directly and stay open.
     See SPEC_SUBSCRIPTION.md §3.3."""

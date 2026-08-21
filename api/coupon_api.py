@@ -12,7 +12,7 @@ from models.db import db_session
 from models.entity.coupon_entity import Coupon
 from models.entity.phone_verification import PhoneVerification
 from models.entity.store_entity import Store
-from models.service import subscription_service
+from models.service import store_feed_service, subscription_service
 
 logger = logging.getLogger(__name__)
 coupon_apis = APIRouter(prefix="/coupons", tags=["coupons"])
@@ -95,6 +95,11 @@ async def create_coupon(payload: CreateCouponPayload, store: Store = Depends(_ge
     db_session.add(coupon)
     db_session.commit()
     db_session.refresh(coupon)
+
+    discount = f"{coupon.discount_value:g}% off" if coupon.discount_type == "percent" else f"${coupon.discount_value:g} off"
+    store_feed_service.emit_update(
+        store.id, "coupon", f"New coupon at {store.name}: {coupon.code} — {discount}", ref_id=coupon.id,
+    )
     return coupon
 
 

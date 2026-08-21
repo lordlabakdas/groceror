@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional
 from uuid import UUID
 
@@ -55,6 +55,16 @@ class FlashSaleResponse(BaseModel):
     created_at: datetime
 
 
+def _to_naive_utc(dt: datetime) -> datetime:
+    """Every FlashSale timestamp is stored/compared as naive UTC (see _enrich,
+    get_active_flash_sale). Incoming payloads may be tz-aware (the frontend
+    sends `Date.toISOString()`, which Pydantic parses as UTC-aware) — normalize
+    so comparisons against datetime.utcnow() don't raise TypeError."""
+    if dt.tzinfo is not None:
+        return dt.astimezone(timezone.utc).replace(tzinfo=None)
+    return dt
+
+
 def _enrich(fs: FlashSale) -> Optional[FlashSaleResponse]:
     inv = db_session.exec(select(Inventory).where(Inventory.id == fs.inventory_id)).first()
     if not inv:
@@ -93,9 +103,11 @@ def get_active_flash_sale(inventory_id: UUID) -> Optional[FlashSale]:
 
 @flash_sale_apis.post("", response_model=FlashSaleResponse)
 async def create_flash_sale(payload: CreateFlashSalePayload, store: Store = Depends(_get_store_write)):
-    if payload.end_at <= payload.start_at:
+    start_at = _to_naive_utc(payload.start_at)
+    end_at = _to_naive_utc(payload.end_at)
+    if end_at <= start_at:
         raise HTTPException(status_code=400, detail="end_at must be after start_at")
-    if payload.end_at <= datetime.utcnow():
+    if end_at <= datetime.utcnow():
         raise HTTPException(status_code=400, detail="end_at must be in the future")
 
     inv = db_session.exec(
@@ -110,8 +122,8 @@ async def create_flash_sale(payload: CreateFlashSalePayload, store: Store = Depe
         inventory_id=payload.inventory_id,
         store_id=store.id,
         sale_price=payload.sale_price,
-        start_at=payload.start_at,
-        end_at=payload.end_at,
+        start_at=start_at,
+        end_at=end_at,
     )
     db_session.add(fs)
     db_session.commit()

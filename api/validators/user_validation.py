@@ -35,6 +35,16 @@ class VerifyOTPResponse(BaseModel):
     message: str
 
 
+class ResetPasswordPayload(BaseModel):
+    phone: str
+    otp: str
+    new_password: str
+
+
+class ResetPasswordResponse(BaseModel):
+    message: str
+
+
 class UserProfilePayload(BaseModel):
     name: str
     email: str

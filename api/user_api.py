@@ -12,6 +12,8 @@ from api.validators.user_validation import (
     MeResponse,
     RegistrationPayload,
     RegistrationResponse,
+    ResetPasswordPayload,
+    ResetPasswordResponse,
     SendOTPPayload,
     SendOTPResponse,
     VerifyOTPPayload,
@@ -90,6 +92,35 @@ async def verify_otp(payload: VerifyOTPPayload):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to verify OTP",
+        )
+
+
+@user_apis.post("/reset-password", response_model=ResetPasswordResponse)
+async def reset_password(payload: ResetPasswordPayload):
+    """Set a new password via OTP, no JWT required — the forgot-password
+    flow's actual reset step. A user who forgot their password has no
+    valid credentials to obtain a JWT with, so /user/change-password
+    (which requires one) can't serve this case; this independently
+    re-validates the OTP the same way /user/verify-otp does."""
+    logger.info(f"Resetting password for phone: {payload.phone}")
+    try:
+        did_reset = auth_helper.reset_password(
+            phone=payload.phone, otp=payload.otp, new_password=payload.new_password
+        )
+        if did_reset:
+            return {"message": "Password reset successfully"}
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid or expired OTP",
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Error resetting password: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to reset password",
         )
 
 

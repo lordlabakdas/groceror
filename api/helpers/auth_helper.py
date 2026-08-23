@@ -243,24 +243,57 @@ def send_sms(phone: str, message: str) -> None:
     )
 
 
-def verify_otp(phone: str, otp: str) -> bool:
-    """Verify OTP for the given phone number."""
-    user = db_session.exec(
+def _check_otp(phone: str, otp: str) -> Optional[PhoneVerification]:
+    """Returns the PhoneVerification row if `otp` is currently valid
+    (matches, unexpired) for `phone`, else None. Shared by verify_otp() and
+    reset_password() — both need the identical validity check; neither
+    clears the OTP itself, so a caller that only wants to *check* validity
+    without consuming the code can call this directly."""
+    record = db_session.exec(
         select(PhoneVerification).where(PhoneVerification.phone == phone)
     ).first()
 
-    if not user or not user.otp:
+    if not record or not record.otp:
+        return None
+
+    if record.otp_expires_at and datetime.utcnow() > record.otp_expires_at:
+        return None
+
+    if record.otp != otp:
+        return None
+
+    return record
+
+
+def verify_otp(phone: str, otp: str) -> bool:
+    """Verify OTP for the given phone number."""
+    record = _check_otp(phone, otp)
+    if not record:
         return False
 
-    if user.otp_expires_at and datetime.utcnow() > user.otp_expires_at:
+    record.is_phone_verified = True
+    record.otp = None
+    record.otp_expires_at = None
+    db_session.commit()
+
+    return True
+
+
+def reset_password(phone: str, otp: str, new_password: str) -> bool:
+    """Set a new password after independently re-validating the OTP —
+    the unauthenticated counterpart to /user/change-password, for a user
+    who by definition doesn't have a JWT (they forgot their password).
+    Deliberately does not depend on verify_otp() having already been
+    called: that clears the OTP on success, and this needs the same code
+    to still be valid at the moment the reset actually happens."""
+    record = _check_otp(phone, otp)
+    if not record:
         return False
 
-    if user.otp != otp:
-        return False
-
-    user.is_phone_verified = True
-    user.otp = None
-    user.otp_expires_at = None
+    record.password = hash_password(new_password)
+    record.is_phone_verified = True
+    record.otp = None
+    record.otp_expires_at = None
     db_session.commit()
 
     return True

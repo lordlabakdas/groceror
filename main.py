@@ -20,6 +20,7 @@ from api.price_alert_api import price_alert_apis
 from api.product_api import product_apis
 from api.wishlist_api import wishlist_apis
 from api.product_review_api import product_review_apis
+from api.saved_deal_api import saved_deal_apis
 from api.scheduled_order_api import scheduled_order_apis
 from api.store_follow_api import store_follow_apis
 from api.store_feed_api import store_feed_apis
@@ -117,6 +118,7 @@ app.include_router(dispute_apis)
 app.include_router(loyalty_apis)
 app.include_router(price_alert_apis)
 app.include_router(wishlist_apis)
+app.include_router(saved_deal_apis)
 app.include_router(product_review_apis)
 app.include_router(scheduled_order_apis)
 app.include_router(stock_alert_apis)

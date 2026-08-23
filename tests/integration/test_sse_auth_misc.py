@@ -120,6 +120,129 @@ class TestUserApiGaps:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# POST /user/reset-password — the forgot-password flow's actual reset step,
+# no JWT required. See groceror-fe issue #12.
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestResetPassword:
+
+    def _phone(self, tag: str) -> str:
+        return f"+1564{_suffix}{tag}"
+
+    def test_wrong_otp_rejected(self):
+        from tests.integration.helpers import get_test_otp
+
+        phone = self._phone("01")
+        r = client.post("/user/send-otp", json={"phone": phone})
+        assert r.status_code == 200, r.text
+        get_test_otp(phone)  # sent, but we deliberately use the wrong one below
+
+        r = client.post(
+            "/user/reset-password",
+            json={"phone": phone, "otp": "000000", "new_password": "NewPass123!"},
+        )
+        assert r.status_code == 400
+        assert r.json()["detail"] == "Invalid or expired OTP"
+
+    def test_expired_otp_rejected(self):
+        from datetime import datetime, timedelta
+
+        from sqlmodel import select
+
+        from models.db import db_session
+        from models.entity.phone_verification import PhoneVerification
+        from tests.integration.helpers import get_test_otp
+
+        phone = self._phone("02")
+        r = client.post("/user/send-otp", json={"phone": phone})
+        assert r.status_code == 200, r.text
+        otp = get_test_otp(phone)
+
+        record = db_session.exec(
+            select(PhoneVerification).where(PhoneVerification.phone == phone)
+        ).first()
+        record.otp_expires_at = datetime.utcnow() - timedelta(minutes=1)
+        db_session.commit()
+
+        r = client.post(
+            "/user/reset-password",
+            json={"phone": phone, "otp": otp, "new_password": "NewPass123!"},
+        )
+        assert r.status_code == 400
+
+    def test_reset_without_jwt_lets_user_log_in_with_new_password(self):
+        """The actual point of the endpoint: no Authorization header
+        anywhere in this test, and the user never re-authenticates with
+        their old (forgotten) password."""
+        from tests.integration.helpers import PASSWORD, get_test_otp
+
+        phone = self._phone("03")
+        _otp_and_verify(phone)
+        _register(phone, "user")
+
+        # Old password still works before the reset.
+        r = client.post("/user/login", json={"phone": phone, "password": PASSWORD})
+        assert r.status_code == 200, r.text
+
+        r = client.post("/user/send-otp", json={"phone": phone})
+        assert r.status_code == 200, r.text
+        otp = get_test_otp(phone)
+
+        r = client.post(
+            "/user/reset-password",
+            json={"phone": phone, "otp": otp, "new_password": "BrandNewPass456!"},
+        )
+        assert r.status_code == 200, r.text
+        assert r.json()["message"] == "Password reset successfully"
+
+        # Old password no longer works...
+        r = client.post("/user/login", json={"phone": phone, "password": PASSWORD})
+        assert r.status_code == 401
+
+        # ...new password does, with no login/JWT step in between the reset.
+        r = client.post("/user/login", json={"phone": phone, "password": "BrandNewPass456!"})
+        assert r.status_code == 200, r.text
+        assert "token" in r.json()
+
+    def test_otp_is_single_use(self):
+        """The same OTP can't be replayed for a second reset."""
+        from tests.integration.helpers import get_test_otp
+
+        phone = self._phone("04")
+        r = client.post("/user/send-otp", json={"phone": phone})
+        assert r.status_code == 200, r.text
+        otp = get_test_otp(phone)
+
+        first = client.post(
+            "/user/reset-password",
+            json={"phone": phone, "otp": otp, "new_password": "FirstPass789!"},
+        )
+        assert first.status_code == 200, first.text
+
+        second = client.post(
+            "/user/reset-password",
+            json={"phone": phone, "otp": otp, "new_password": "SecondPass000!"},
+        )
+        assert second.status_code == 400
+
+    def test_unknown_phone_rejected(self):
+        r = client.post(
+            "/user/reset-password",
+            json={"phone": "+19999999999999", "otp": "123456", "new_password": "NewPass123!"},
+        )
+        assert r.status_code == 400
+
+    def test_reset_password_failure_returns_500(self):
+        with patch("api.user_api.auth_helper.reset_password", side_effect=RuntimeError("boom")):
+            r = client.post(
+                "/user/reset-password",
+                json={"phone": "+15559990099", "otp": "000000", "new_password": "x"},
+            )
+        assert r.status_code == 500
+        assert r.json()["detail"] == "Failed to reset password"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # api/google_login.py
 # ─────────────────────────────────────────────────────────────────────────────
 

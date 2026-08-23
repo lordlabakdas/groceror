@@ -232,9 +232,12 @@ class OrderService:
                 ))
 
             # Decrement stock now that availability has been confirmed above.
+            from api.helpers.inventory_helper import check_low_stock_alert
+
             for inv_id, qty in requested_qty.items():
                 inventory_map[inv_id].quantity -= qty
                 db_session.add(inventory_map[inv_id])
+                check_low_stock_alert(inv_id, inventory_map[inv_id].quantity, store_id)
 
             # Increment coupon uses_count
             if coupon:

@@ -17,6 +17,33 @@ from models.entity.stock_threshold_entity import StockThreshold
 logger = logging.getLogger()
 
 
+def check_low_stock_alert(
+    inventory_id: uuid.UUID, quantity: int, store_id: uuid.UUID
+) -> None:
+    """Trigger a low-stock alert if quantity has dropped to/below a configured,
+    not-yet-triggered threshold. Shared by every code path that changes an
+    inventory item's quantity (manual edits here, order-driven decrements in
+    orders_service) so stock alerts fire regardless of how stock went low."""
+    threshold = db_session.exec(
+        select(StockThreshold).where(StockThreshold.inventory_id == inventory_id)
+    ).first()
+    if threshold and not threshold.is_triggered and quantity <= threshold.threshold:
+        threshold.is_triggered = True
+        threshold.triggered_at = datetime.utcnow()
+        db_session.add(threshold)
+        from api.sse_bus import publish as sse_publish
+
+        sse_publish(
+            str(store_id),
+            "low_stock_alert",
+            {
+                "inventory_id": str(inventory_id),
+                "quantity": quantity,
+                "threshold": threshold.threshold,
+            },
+        )
+
+
 class InventoryHelper:
     def __init__(self, user: PhoneVerification) -> None:
         self.entity = user  # PhoneVerification record from auth_required
@@ -147,20 +174,7 @@ class InventoryHelper:
         if quantity is not None:
             prev_quantity = existing.quantity
             existing.quantity = quantity
-            # Low-stock alert trigger
-            threshold = db_session.exec(
-                select(StockThreshold).where(StockThreshold.inventory_id == inventory_id)
-            ).first()
-            if threshold and not threshold.is_triggered and quantity <= threshold.threshold:
-                threshold.is_triggered = True
-                threshold.triggered_at = datetime.utcnow()
-                db_session.add(threshold)
-                from api.sse_bus import publish as sse_publish
-                sse_publish(
-                    str(self.store.id),
-                    "low_stock_alert",
-                    {"inventory_id": str(inventory_id), "quantity": quantity, "threshold": threshold.threshold},
-                )
+            check_low_stock_alert(inventory_id, quantity, self.store.id)
             # Back-in-stock trigger
             if prev_quantity == 0 and quantity > 0:
                 from api.back_in_stock_api import trigger_back_in_stock

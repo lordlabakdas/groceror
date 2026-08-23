@@ -24,6 +24,7 @@ from api.saved_deal_api import saved_deal_apis
 from api.scheduled_order_api import scheduled_order_apis
 from api.store_follow_api import store_follow_apis
 from api.store_feed_api import store_feed_apis
+from api.sponsored_post_api import sponsored_post_apis
 from api.stock_alert_api import stock_alert_apis
 from api.flash_sale_api import flash_sale_apis
 from api.back_in_stock_api import back_in_stock_apis
@@ -105,6 +106,7 @@ app.include_router(inventory_apis)
 # store_ids).
 app.include_router(store_follow_apis)
 app.include_router(store_feed_apis)
+app.include_router(sponsored_post_apis)
 app.include_router(featured_store_apis)
 app.include_router(store_apis)
 app.include_router(cart_apis)

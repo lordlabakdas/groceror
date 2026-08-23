@@ -269,12 +269,16 @@ class TestFeed:
         assert r.status_code == 400
         assert r.json()["detail"] == "User profile not set"
 
-    def test_feed_only_shows_followed_stores(self, feed_nonfollower_token):
+    def test_feed_only_shows_followed_stores(self, feed_nonfollower_token, feed_store_id):
+        """A non-follower's feed excludes feed_store's non-sponsored activity.
+        Not asserting an empty list overall: sponsored posts (SPEC_SPONSORED_
+        POSTS.md) are visible to every shopper regardless of follow status
+        by design, and other test modules may have created some — this test
+        only cares that follow-scoping itself excludes feed_store."""
         r = client.get("/feed", headers=_headers(feed_nonfollower_token))
         assert r.status_code == 200, r.text
         data = r.json()
-        assert data["items"] == []
-        assert data["unread_count"] == 0
+        assert all(item["store_id"] != feed_store_id for item in data["items"])
 
     def test_feed_item_created_at_is_tz_aware(self, feed_user_token, feed_followed):
         """Regression test: created_at must serialize with a UTC offset, same
@@ -289,11 +293,19 @@ class TestFeed:
             assert item["created_at"].endswith("+00:00") or item["created_at"].endswith("Z")
 
     def test_feed_shows_followed_store_activity(self, feed_user_token, feed_store_id, feed_followed):
+        """Every item is either from feed_store (followed) or a sponsored
+        post (visible platform-wide by design, SPEC_SPONSORED_POSTS.md) —
+        and at least one item actually comes from feed_store, proving
+        follow-scoping itself still works."""
         r = client.get("/feed", headers=_headers(feed_user_token))
         assert r.status_code == 200, r.text
         data = r.json()
         assert len(data["items"]) > 0
-        assert all(item["store_id"] == feed_store_id for item in data["items"])
+        assert any(item["store_id"] == feed_store_id for item in data["items"])
+        assert all(
+            item["store_id"] == feed_store_id or item["update_type"] == "sponsored"
+            for item in data["items"]
+        )
         # newest first
         created_ats = [item["created_at"] for item in data["items"]]
         assert created_ats == sorted(created_ats, reverse=True)

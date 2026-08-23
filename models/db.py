@@ -41,6 +41,8 @@ from models.entity.subscription_invoice_entity import SubscriptionInvoice  # noq
 from models.entity.store_feed_post_entity import StoreFeedPost  # noqa: F401
 from models.entity.feed_read_state_entity import FeedReadState  # noqa: F401
 from models.entity.saved_deal_entity import SavedDeal  # noqa: F401
+from models.entity.sponsored_post_pricing_entity import SponsoredPostPricing  # noqa: F401
+from models.entity.sponsored_post_entity import SponsoredPost  # noqa: F401
 
 engine = create_engine(
     DBConfig.DB_URL, echo=True, connect_args={"options": "-c search_path=public"}, pool_pre_ping=True

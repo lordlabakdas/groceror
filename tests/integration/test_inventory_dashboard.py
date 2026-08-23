@@ -589,6 +589,30 @@ class TestUpdateInventoryEndpoint:
         r = client.put(f"/inventory/{inv_id}", json={"quantity": 5}, headers=_headers(token))
         assert r.status_code == 200
 
+    def test_order_decrementing_stock_triggers_low_stock_alert(self):
+        """An order eating into stock, not just a manual quantity edit, must
+        also flip StockThreshold.is_triggered — orders_service.create_order
+        decrements Inventory.quantity directly rather than going through
+        InventoryHelper.update_inventory_fields, so it needs its own call
+        into check_low_stock_alert (api/helpers/inventory_helper.py)."""
+        store_token = _new_store_account("orderlowstock")
+        inv_id = _add_item(store_token, _n("OrderLowStockTrigger"), 10, price=1.0)
+        client.put(f"/inventory/{inv_id}/threshold", json={"threshold": 5}, headers=_headers(store_token))
+
+        buyer_token = _new_user_account("orderlowstockbuyer")
+        r = client.post(
+            "/order/create-order",
+            json={"items": [{"inventory_id": inv_id, "quantity": 8}]},
+            headers=_headers(buyer_token),
+        )
+        assert r.status_code == 200, r.text
+
+        alerts = client.get("/stock-alerts", headers=_headers(store_token))
+        assert alerts.status_code == 200
+        alert = next(a for a in alerts.json() if a["inventory_id"] == inv_id)
+        assert alert["is_triggered"] is True
+        assert alert["current_stock"] == 2
+
     def test_update_inventory_triggers_back_in_stock(self):
         """quantity 0 -> positive fires trigger_back_in_stock()
         (inventory_helper.py lines 152-153)."""

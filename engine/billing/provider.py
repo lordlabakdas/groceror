@@ -21,6 +21,11 @@ class RazorpaySubscription:
 
 
 @dataclass
+class RazorpayOrder:
+    razorpay_order_id: str
+
+
+@dataclass
 class SubscriptionWebhookEvent:
     """Normalized shape of an inbound Razorpay subscription webhook.
     `event` is one of: subscription.authenticated, subscription.activated,
@@ -63,4 +68,17 @@ class BillingProvider(Protocol):
     def parse_webhook(self, payload: dict) -> SubscriptionWebhookEvent:
         """Signature verification happens separately, at the API layer,
         before this is called — see api/subscription_api.py."""
+        ...
+
+    def create_order(self, amount_paise: int) -> RazorpayOrder:
+        """One-time charge — Razorpay Orders API, distinct from the
+        Subscriptions objects above. currency="INR". See
+        SPEC_SPONSORED_POSTS.md §3.3."""
+        ...
+
+    def verify_payment_signature(self, order_id: str, payment_id: str, signature: str) -> bool:
+        """Synchronous verification of a client-side Razorpay Checkout
+        success callback (Orders mode) — distinct from
+        verify_webhook_signature, which validates an inbound webhook POST,
+        not a checkout-handler callback."""
         ...

@@ -20,6 +20,7 @@ from config import RazorpayConfig
 from engine.billing.provider import (
     BillingProviderError,
     RazorpayCustomer,
+    RazorpayOrder,
     RazorpaySubscription,
     SubscriptionWebhookEvent,
 )
@@ -99,6 +100,32 @@ class RazorpayProvider:
         try:
             self._client.utility.verify_webhook_signature(
                 raw_body.decode(), signature, RazorpayConfig.WEBHOOK_SECRET
+            )
+            return True
+        except razorpay.errors.SignatureVerificationError:
+            return False
+
+    def create_order(self, amount_paise: int) -> RazorpayOrder:
+        try:
+            order = self._client.order.create(
+                {
+                    "amount": amount_paise,
+                    "currency": "INR",
+                    "payment_capture": 1,
+                }
+            )
+        except Exception as e:
+            raise BillingProviderError(f"Failed to create Razorpay order: {e}")
+        return RazorpayOrder(razorpay_order_id=order["id"])
+
+    def verify_payment_signature(self, order_id: str, payment_id: str, signature: str) -> bool:
+        try:
+            self._client.utility.verify_payment_signature(
+                {
+                    "razorpay_order_id": order_id,
+                    "razorpay_payment_id": payment_id,
+                    "razorpay_signature": signature,
+                }
             )
             return True
         except razorpay.errors.SignatureVerificationError:

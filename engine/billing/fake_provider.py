@@ -10,11 +10,13 @@ from uuid import uuid4
 
 from engine.billing.provider import (
     RazorpayCustomer,
+    RazorpayOrder,
     RazorpaySubscription,
     SubscriptionWebhookEvent,
 )
 
 VALID_SIGNATURE = "fake-valid-signature"
+VALID_PAYMENT_SIGNATURE = "fake-valid-payment-signature"
 
 
 class FakeBillingProvider:
@@ -23,6 +25,7 @@ class FakeBillingProvider:
         self.customers: dict[str, dict] = {}
         self.subscriptions: dict[str, dict] = {}
         self.cancelled: set[str] = set()
+        self.orders: dict[str, int] = {}
 
     def create_plan(self, price_paise: int) -> str:
         plan_id = f"fake_plan_{uuid4().hex[:8]}"
@@ -48,6 +51,14 @@ class FakeBillingProvider:
 
     def verify_webhook_signature(self, raw_body: bytes, signature: str | None) -> bool:
         return signature == VALID_SIGNATURE
+
+    def create_order(self, amount_paise: int) -> RazorpayOrder:
+        order_id = f"fake_order_{uuid4().hex[:8]}"
+        self.orders[order_id] = amount_paise
+        return RazorpayOrder(razorpay_order_id=order_id)
+
+    def verify_payment_signature(self, order_id: str, payment_id: str, signature: str) -> bool:
+        return signature == VALID_PAYMENT_SIGNATURE
 
     def parse_webhook(self, payload: dict) -> SubscriptionWebhookEvent:
         event = payload["event"]

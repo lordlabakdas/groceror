@@ -45,7 +45,10 @@ from models.entity.sponsored_post_pricing_entity import SponsoredPostPricing  # 
 from models.entity.sponsored_post_entity import SponsoredPost  # noqa: F401
 
 engine = create_engine(
-    DBConfig.DB_URL, echo=True, connect_args={"options": "-c search_path=public"}, pool_pre_ping=True
+    DBConfig.DB_URL,
+    echo=True,
+    connect_args={"options": "-c search_path=public", "connect_timeout": 5},
+    pool_pre_ping=True,
 )
 
 _local = threading.local()

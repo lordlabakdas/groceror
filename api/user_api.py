@@ -126,7 +126,7 @@ async def reset_password(payload: ResetPasswordPayload):
 
 @user_apis.post("/register", response_model=RegistrationResponse)
 async def register(registration_payload: RegistrationPayload):
-    logger.info(f"Registering user with payload: {registration_payload}")
+    logger.info(f"Registering user with phone: {registration_payload.phone}")
     try:
         # Check if user already exists (i.e. OTP has been sent)
         if not auth_helper.is_user_exists(phone=registration_payload.phone):
@@ -205,7 +205,7 @@ async def set_profile(
 
 @user_apis.post("/login", response_model=LoginResponse)
 async def login(login_payload: LoginPayload):
-    logger.info(f"Logging in user with payload: {login_payload.model_dump()}")
+    logger.info(f"Logging in user with phone: {login_payload.phone}")
 
     user = auth_helper.get_user_by_phone(phone=login_payload.phone)
     if not user or not auth_helper.verify_password(
@@ -228,7 +228,7 @@ async def change_password(
     change_password_payload: ChangePasswordPayload,
     current_user: PhoneVerification = Depends(get_current_user),
 ):
-    logger.info(f"Changing password for user with payload: {change_password_payload}")
+    logger.info(f"Changing password for user with phone: {current_user.phone}")
     # Update the password in the PhoneVerification model
     current_user.password = auth_helper.hash_password(change_password_payload.new_password)  # type: ignore
     from models.db import db_session

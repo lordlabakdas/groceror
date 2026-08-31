@@ -19,13 +19,21 @@ Run a single test:
 venv/bin/pytest tests/unit/test_dashboard.py::test_dashboard_response_empty -v
 ```
 
+`make lint` currently fails on pre-existing `ruff` E712 warnings (`== True` / `== False` on SQLModel column comparisons, e.g. `PriceAlert.is_active == True`) — this is the established idiom throughout the codebase for SQL comparisons, not something CI gates on today, and not a regression if a diff you're reviewing follows the same pattern.
+
 ## Development Workflow
 
-Prefer a git worktree over editing directly in this checkout for any non-trivial change (new features, migrations, anything that leaves the app in a broken intermediate state across multiple commits). Create one on its own branch — e.g. `git worktree add ../groceror-<feature> -b <feature-branch>` — do the work there, and merge/push to `master` once it's ready. Trivial one-off fixes (typos, single-line corrections) can still go straight to `master` in the main checkout.
+Never commit directly to `master`, even for trivial one-off fixes. Always create a git worktree on its own branch — e.g. `git worktree add ../groceror-<feature> -b <feature-branch>` — do the work there, and open a PR into `master` once it's ready.
+
+### Cross-repo changes
+
+A feature that touches both this repo and [groceror-fe](https://github.com/lordlabakdas/groceror-fe) (new/changed endpoint + the frontend code that consumes it) gets one PR per repo, not a combined change in one. Cross-link them in each PR's description, and land this repo's PR first — the groceror-fe PR then depends on a real, already-existing endpoint rather than one that only exists in a branch.
 
 ## Configuration
 
 All config lives in `.env` (python-dotenv), not `.config.yml` — the YAML config was replaced by env vars. `config.py` calls `load_dotenv(.env)` and reads `DB_*`, `JWT_*`, `TWILIO_*`, and `RESEND_*` into `DBConfig`, `JWTConfig`, `TwilioConfig`, and `EmailConfig` dataclasses (`DATABASE_URL` overrides the individual `DB_*` fields if set). A stray `.config.yml` may still exist locally from before the migration — it is not read by any code.
+
+To manually click through an OTP login with `make run` (as opposed to the pytest suite's own SQLite-backed `get_test_otp()` — see Testing Approach below) without real Twilio credentials, just leave `TWILIO_ACCOUNT_SID`/`TWILIO_AUTH_TOKEN` unset: `api/helpers/auth_helper.py`'s `send_sms` falls back to printing `[SMS fallback] OTP for <phone>: ...` to stdout instead of sending a real SMS, so the OTP shows up right in the terminal running `make run`.
 
 ## Architecture
 

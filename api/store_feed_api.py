@@ -3,8 +3,9 @@ from typing import List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, Field as PydanticField
-from sqlmodel import select, func
+from pydantic import BaseModel
+from pydantic import Field as PydanticField
+from sqlmodel import func, select
 
 from helpers.jwt import auth_required
 from models.db import db_session
@@ -26,10 +27,14 @@ async def _get_user(entity: PhoneVerification = Depends(auth_required)) -> User:
 
 async def _get_store(entity: PhoneVerification = Depends(auth_required)) -> Store:
     if entity.entity_type != "store":
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Store access only")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Store access only"
+        )
     store = db_session.exec(select(Store).where(Store.entity_id == entity.id)).first()
     if not store:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Store profile not set")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Store profile not set"
+        )
     return store
 
 
@@ -47,6 +52,9 @@ class FeedItemResponse(BaseModel):
     message: str
     ref_id: Optional[UUID]
     created_at: datetime
+    discount_label: Optional[str] = None
+    coupon_code: Optional[str] = None
+    expires_at: Optional[datetime] = None
 
 
 class FeedResponse(BaseModel):
@@ -94,6 +102,9 @@ async def get_feed(
             message=row["post"].message,
             ref_id=row["post"].ref_id,
             created_at=_aware_utc(row["post"].created_at),
+            discount_label=row.get("discount_label"),
+            coupon_code=row.get("coupon_code"),
+            expires_at=row.get("expires_at"),
         )
         for row in rows
     ]
@@ -109,25 +120,45 @@ async def mark_feed_read(user: User = Depends(_get_user)):
     store_feed_service.mark_read(user.id)
 
 
-@store_feed_apis.post("/stores/updates", response_model=FeedItemResponse, status_code=status.HTTP_201_CREATED)
-async def post_announcement(payload: PostAnnouncementPayload, store: Store = Depends(_get_store_write)):
-    post = store_feed_service.emit_update(store.id, "announcement", payload.message.strip())
+@store_feed_apis.post(
+    "/stores/updates",
+    response_model=FeedItemResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def post_announcement(
+    payload: PostAnnouncementPayload, store: Store = Depends(_get_store_write)
+):
+    post = store_feed_service.emit_update(
+        store.id, "announcement", payload.message.strip()
+    )
     return FeedItemResponse(
-        id=post.id, store_id=store.id, store_name=store.name,
-        update_type=post.update_type, message=post.message,
-        ref_id=post.ref_id, created_at=_aware_utc(post.created_at),
+        id=post.id,
+        store_id=store.id,
+        store_name=store.name,
+        update_type=post.update_type,
+        message=post.message,
+        ref_id=post.ref_id,
+        created_at=_aware_utc(post.created_at),
     )
 
 
-@store_feed_apis.delete("/stores/updates/{update_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_announcement(update_id: UUID, store: Store = Depends(_get_store_write)):
+@store_feed_apis.delete(
+    "/stores/updates/{update_id}", status_code=status.HTTP_204_NO_CONTENT
+)
+async def delete_announcement(
+    update_id: UUID, store: Store = Depends(_get_store_write)
+):
     post = db_session.exec(
-        select(StoreFeedPost).where(StoreFeedPost.id == update_id, StoreFeedPost.store_id == store.id)
+        select(StoreFeedPost).where(
+            StoreFeedPost.id == update_id, StoreFeedPost.store_id == store.id
+        )
     ).first()
     if not post:
         raise HTTPException(status_code=404, detail="Update not found")
     if post.update_type != "announcement":
-        raise HTTPException(status_code=400, detail="Only manually posted announcements can be deleted")
+        raise HTTPException(
+            status_code=400, detail="Only manually posted announcements can be deleted"
+        )
     db_session.delete(post)
     db_session.commit()
 
@@ -152,14 +183,22 @@ async def list_store_updates(
         .limit(limit)
     ).all()
     total = db_session.exec(
-        select(func.count()).select_from(StoreFeedPost).where(StoreFeedPost.store_id == store_id)
+        select(func.count())
+        .select_from(StoreFeedPost)
+        .where(StoreFeedPost.store_id == store_id)
     ).one()
 
+    discounts = store_feed_service.enrich_discount_info(posts)
     items = [
         FeedItemResponse(
-            id=p.id, store_id=store.id, store_name=store.name,
-            update_type=p.update_type, message=p.message,
-            ref_id=p.ref_id, created_at=_aware_utc(p.created_at),
+            id=p.id,
+            store_id=store.id,
+            store_name=store.name,
+            update_type=p.update_type,
+            message=p.message,
+            ref_id=p.ref_id,
+            created_at=_aware_utc(p.created_at),
+            **discounts.get(p.id, {}),
         )
         for p in posts
     ]

@@ -11,12 +11,14 @@ Uses its own dedicated user/store fixtures (not the shared conftest ones)
 so feed state — follows, posts, read cursor — doesn't depend on what other
 test files in this run have already done to the shared store.
 """
+
 import uuid
 from datetime import date, datetime, timedelta
 
 import pytest
 
-from tests.integration.helpers import _headers, _login, _otp_and_verify, _register, client
+from tests.integration.helpers import (_headers, _login, _otp_and_verify,
+                                       _register, client)
 
 _suffix = str(uuid.uuid4().int)[:6]
 FEED_USER_PHONE = f"+1569{_suffix}01"
@@ -31,7 +33,11 @@ def feed_user_token():
     token = _login(FEED_USER_PHONE)
     r = client.post(
         "/user/set-profile",
-        json={"name": "Feed Shopper", "email": "feedshopper@groceror.test", "location": "Feed City"},
+        json={
+            "name": "Feed Shopper",
+            "email": "feedshopper@groceror.test",
+            "location": "Feed City",
+        },
         headers=_headers(token),
     )
     assert r.status_code == 200, r.text
@@ -46,7 +52,11 @@ def feed_nonfollower_token():
     token = _login(FEED_NONFOLLOWER_PHONE)
     r = client.post(
         "/user/set-profile",
-        json={"name": "Non Follower", "email": "nonfollower@groceror.test", "location": "Elsewhere"},
+        json={
+            "name": "Non Follower",
+            "email": "nonfollower@groceror.test",
+            "location": "Elsewhere",
+        },
         headers=_headers(token),
     )
     assert r.status_code == 200, r.text
@@ -65,8 +75,10 @@ def feed_store_id(feed_store_token):
     r = client.post(
         "/stores/",
         json={
-            "name": "Feed Grocer", "email": "feedgrocer@groceror.test",
-            "website": "https://feedgrocer.test", "location": "1 Feed St",
+            "name": "Feed Grocer",
+            "email": "feedgrocer@groceror.test",
+            "website": "https://feedgrocer.test",
+            "location": "1 Feed St",
         },
         headers=_headers(feed_store_token),
     )
@@ -79,8 +91,10 @@ def feed_store_profile(feed_store_token, feed_store_id):
     r = client.post(
         "/user/set-profile",
         json={
-            "name": "Feed Grocer", "email": "feedgrocer@groceror.test",
-            "website": "https://feedgrocer.test", "location": "1 Feed St",
+            "name": "Feed Grocer",
+            "email": "feedgrocer@groceror.test",
+            "website": "https://feedgrocer.test",
+            "location": "1 Feed St",
         },
         headers=_headers(feed_store_token),
     )
@@ -102,7 +116,9 @@ def feed_inventory_id(feed_store_token, feed_store_id, feed_store_profile):
 @pytest.fixture(scope="module")
 def feed_followed(feed_user_token, feed_store_id, feed_store_profile):
     """feed_user follows feed_store, once, for the whole module."""
-    r = client.post(f"/stores/{feed_store_id}/follow", headers=_headers(feed_user_token))
+    r = client.post(
+        f"/stores/{feed_store_id}/follow", headers=_headers(feed_user_token)
+    )
     assert r.status_code == 200, r.text
     return True
 
@@ -111,17 +127,26 @@ def feed_followed(feed_user_token, feed_store_id, feed_store_profile):
 # ANNOUNCEMENTS
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class TestAnnouncements:
 
     def test_post_announcement_requires_store(self, feed_user_token):
-        r = client.post("/stores/updates", json={"message": "hi"}, headers=_headers(feed_user_token))
+        r = client.post(
+            "/stores/updates", json={"message": "hi"}, headers=_headers(feed_user_token)
+        )
         assert r.status_code == 403
 
-    def test_post_announcement_rejects_empty_message(self, feed_store_token, feed_store_profile):
-        r = client.post("/stores/updates", json={"message": ""}, headers=_headers(feed_store_token))
+    def test_post_announcement_rejects_empty_message(
+        self, feed_store_token, feed_store_profile
+    ):
+        r = client.post(
+            "/stores/updates", json={"message": ""}, headers=_headers(feed_store_token)
+        )
         assert r.status_code == 422
 
-    def test_post_announcement_success(self, feed_store_token, feed_store_id, feed_store_profile, feed_followed):
+    def test_post_announcement_success(
+        self, feed_store_token, feed_store_id, feed_store_profile, feed_followed
+    ):
         r = client.post(
             "/stores/updates",
             json={"message": "New shipment of organic produce arriving Friday!"},
@@ -133,35 +158,57 @@ class TestAnnouncements:
         assert data["update_type"] == "announcement"
         assert data["message"] == "New shipment of organic produce arriving Friday!"
         assert data["ref_id"] is None
+        assert data["discount_label"] is None
+        assert data["coupon_code"] is None
+        assert data["expires_at"] is None
 
-    def test_delete_announcement_wrong_owner(self, feed_store_token, feed_store_id, feed_store_profile):
+    def test_delete_announcement_wrong_owner(
+        self, feed_store_token, feed_store_id, feed_store_profile
+    ):
         create = client.post(
-            "/stores/updates", json={"message": "temp"}, headers=_headers(feed_store_token),
+            "/stores/updates",
+            json={"message": "temp"},
+            headers=_headers(feed_store_token),
         )
         assert create.status_code == 201, create.text
         update_id = create.json()["id"]
 
-        r = client.delete(f"/stores/updates/{update_id}", headers=_headers(feed_store_token))
+        r = client.delete(
+            f"/stores/updates/{update_id}", headers=_headers(feed_store_token)
+        )
         assert r.status_code == 204, r.text
 
     def test_delete_announcement_not_found(self, feed_store_token, feed_store_profile):
         fake_id = str(uuid.uuid4())
-        r = client.delete(f"/stores/updates/{fake_id}", headers=_headers(feed_store_token))
+        r = client.delete(
+            f"/stores/updates/{fake_id}", headers=_headers(feed_store_token)
+        )
         assert r.status_code == 404
 
-    def test_delete_auto_generated_post_rejected(self, feed_store_token, feed_store_id, feed_store_profile, feed_inventory_id):
+    def test_delete_auto_generated_post_rejected(
+        self, feed_store_token, feed_store_id, feed_store_profile, feed_inventory_id
+    ):
         coupon_code = f"NODEL{_suffix}"
         r = client.post(
-            "/coupons", json={"code": coupon_code, "discount_type": "fixed", "discount_value": 2},
+            "/coupons",
+            json={"code": coupon_code, "discount_type": "fixed", "discount_value": 2},
             headers=_headers(feed_store_token),
         )
         assert r.status_code == 201, r.text
 
-        updates = client.get(f"/stores/{feed_store_id}/updates", headers=_headers(feed_store_token))
+        updates = client.get(
+            f"/stores/{feed_store_id}/updates", headers=_headers(feed_store_token)
+        )
         assert updates.status_code == 200, updates.text
-        coupon_post = next(i for i in updates.json()["items"] if i["update_type"] == "coupon" and i["message"].find(coupon_code) != -1)
+        coupon_post = next(
+            i
+            for i in updates.json()["items"]
+            if i["update_type"] == "coupon" and i["message"].find(coupon_code) != -1
+        )
 
-        r = client.delete(f"/stores/updates/{coupon_post['id']}", headers=_headers(feed_store_token))
+        r = client.delete(
+            f"/stores/updates/{coupon_post['id']}", headers=_headers(feed_store_token)
+        )
         assert r.status_code == 400
 
 
@@ -169,9 +216,12 @@ class TestAnnouncements:
 # AUTO-EMISSION
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class TestAutoEmission:
 
-    def test_coupon_creation_emits_feed_post(self, feed_store_token, feed_store_id, feed_store_profile):
+    def test_coupon_creation_emits_feed_post(
+        self, feed_store_token, feed_store_id, feed_store_profile
+    ):
         code = f"FEED10{_suffix}"
         r = client.post(
             "/coupons",
@@ -181,14 +231,42 @@ class TestAutoEmission:
         assert r.status_code == 201, r.text
         coupon_id = r.json()["id"]
 
-        updates = client.get(f"/stores/{feed_store_id}/updates", headers=_headers(feed_store_token))
+        updates = client.get(
+            f"/stores/{feed_store_id}/updates", headers=_headers(feed_store_token)
+        )
         assert updates.status_code == 200, updates.text
-        matches = [i for i in updates.json()["items"] if i["update_type"] == "coupon" and i["ref_id"] == coupon_id]
+        matches = [
+            i
+            for i in updates.json()["items"]
+            if i["update_type"] == "coupon" and i["ref_id"] == coupon_id
+        ]
         assert len(matches) == 1
         assert code in matches[0]["message"]
         assert "10%" in matches[0]["message"]
 
-    def test_new_promotion_emits_feed_post(self, feed_store_token, feed_store_id, feed_store_profile, feed_inventory_id):
+    def test_coupon_feed_post_carries_discount_info(
+        self, feed_store_token, feed_store_id, feed_store_profile
+    ):
+        code = f"DISC{_suffix}"
+        r = client.post(
+            "/coupons",
+            json={"code": code, "discount_type": "fixed", "discount_value": 3},
+            headers=_headers(feed_store_token),
+        )
+        assert r.status_code == 201, r.text
+        coupon_id = r.json()["id"]
+
+        updates = client.get(
+            f"/stores/{feed_store_id}/updates", headers=_headers(feed_store_token)
+        )
+        post = next(i for i in updates.json()["items"] if i["ref_id"] == coupon_id)
+        assert post["discount_label"] == "$3 off"
+        assert post["coupon_code"] == code
+        assert post["expires_at"] is None
+
+    def test_new_promotion_emits_feed_post(
+        self, feed_store_token, feed_store_id, feed_store_profile, feed_inventory_id
+    ):
         r = client.post(
             f"/inventory/{feed_inventory_id}/promotion",
             json={
@@ -200,12 +278,24 @@ class TestAutoEmission:
         )
         assert r.status_code == 200, r.text
 
-        updates = client.get(f"/stores/{feed_store_id}/updates", headers=_headers(feed_store_token))
-        promo_posts = [i for i in updates.json()["items"] if i["update_type"] == "promotion"]
+        updates = client.get(
+            f"/stores/{feed_store_id}/updates", headers=_headers(feed_store_token)
+        )
+        promo_posts = [
+            i for i in updates.json()["items"] if i["update_type"] == "promotion"
+        ]
         assert len(promo_posts) == 1
         assert "Feed Eggs" in promo_posts[0]["message"]
+        assert promo_posts[0]["discount_label"] == "$7.5"
+        assert promo_posts[0]["coupon_code"] is None
+        assert promo_posts[0]["expires_at"] is not None
+        assert promo_posts[0]["expires_at"].startswith(
+            str(date.today() + timedelta(days=7))
+        )
 
-    def test_promotion_update_does_not_re_emit(self, feed_store_token, feed_store_id, feed_store_profile, feed_inventory_id):
+    def test_promotion_update_does_not_re_emit(
+        self, feed_store_token, feed_store_id, feed_store_profile, feed_inventory_id
+    ):
         """Second call to the same endpoint updates the existing Promotion row —
         should not post a second feed entry (see SPEC_STORE_FOLLOW_FEED.md §3)."""
         r = client.post(
@@ -219,48 +309,82 @@ class TestAutoEmission:
         )
         assert r.status_code == 200, r.text
 
-        updates = client.get(f"/stores/{feed_store_id}/updates", headers=_headers(feed_store_token))
-        promo_posts = [i for i in updates.json()["items"] if i["update_type"] == "promotion"]
+        updates = client.get(
+            f"/stores/{feed_store_id}/updates", headers=_headers(feed_store_token)
+        )
+        promo_posts = [
+            i for i in updates.json()["items"] if i["update_type"] == "promotion"
+        ]
         assert len(promo_posts) == 1  # still just the one from the create above
 
-    def test_flash_sale_creation_emits_feed_post(self, feed_store_token, feed_store_id, feed_store_profile, feed_inventory_id):
+    def test_flash_sale_creation_emits_feed_post(
+        self, feed_store_token, feed_store_id, feed_store_profile, feed_inventory_id
+    ):
         start_at = (datetime.utcnow() - timedelta(minutes=1)).isoformat() + "Z"
         end_at = (datetime.utcnow() + timedelta(hours=1)).isoformat() + "Z"
         r = client.post(
             "/flash-sales",
-            json={"inventory_id": feed_inventory_id, "sale_price": 5.0, "start_at": start_at, "end_at": end_at},
+            json={
+                "inventory_id": feed_inventory_id,
+                "sale_price": 5.0,
+                "start_at": start_at,
+                "end_at": end_at,
+            },
             headers=_headers(feed_store_token),
         )
         assert r.status_code == 200, r.text
         sale_id = r.json()["id"]
 
-        updates = client.get(f"/stores/{feed_store_id}/updates", headers=_headers(feed_store_token))
-        matches = [i for i in updates.json()["items"] if i["update_type"] == "flash_sale" and i["ref_id"] == sale_id]
+        updates = client.get(
+            f"/stores/{feed_store_id}/updates", headers=_headers(feed_store_token)
+        )
+        matches = [
+            i
+            for i in updates.json()["items"]
+            if i["update_type"] == "flash_sale" and i["ref_id"] == sale_id
+        ]
         assert len(matches) == 1
         assert "Feed Eggs" in matches[0]["message"]
+        assert matches[0]["discount_label"] == "$5"
+        assert matches[0]["coupon_code"] is None
+        assert matches[0]["expires_at"] is not None
 
-    def test_cancelling_flash_sale_leaves_feed_post(self, feed_store_token, feed_store_id, feed_store_profile, feed_inventory_id):
+    def test_cancelling_flash_sale_leaves_feed_post(
+        self, feed_store_token, feed_store_id, feed_store_profile, feed_inventory_id
+    ):
         start_at = (datetime.utcnow() - timedelta(minutes=1)).isoformat() + "Z"
         end_at = (datetime.utcnow() + timedelta(hours=2)).isoformat() + "Z"
         created = client.post(
             "/flash-sales",
-            json={"inventory_id": feed_inventory_id, "sale_price": 4.0, "start_at": start_at, "end_at": end_at},
+            json={
+                "inventory_id": feed_inventory_id,
+                "sale_price": 4.0,
+                "start_at": start_at,
+                "end_at": end_at,
+            },
             headers=_headers(feed_store_token),
         )
         assert created.status_code == 200, created.text
         sale_id = created.json()["id"]
 
-        cancel = client.delete(f"/flash-sales/{sale_id}", headers=_headers(feed_store_token))
+        cancel = client.delete(
+            f"/flash-sales/{sale_id}", headers=_headers(feed_store_token)
+        )
         assert cancel.status_code == 204, cancel.text
 
-        updates = client.get(f"/stores/{feed_store_id}/updates", headers=_headers(feed_store_token))
+        updates = client.get(
+            f"/stores/{feed_store_id}/updates", headers=_headers(feed_store_token)
+        )
         matches = [i for i in updates.json()["items"] if i["ref_id"] == sale_id]
-        assert len(matches) == 1  # immutable history — the post is not removed on cancel
+        assert (
+            len(matches) == 1
+        )  # immutable history — the post is not removed on cancel
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # FEED (shopper side)
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class TestFeed:
 
@@ -269,7 +393,9 @@ class TestFeed:
         assert r.status_code == 400
         assert r.json()["detail"] == "User profile not set"
 
-    def test_feed_only_shows_followed_stores(self, feed_nonfollower_token, feed_store_id):
+    def test_feed_only_shows_followed_stores(
+        self, feed_nonfollower_token, feed_store_id
+    ):
         """A non-follower's feed excludes feed_store's non-sponsored activity.
         Not asserting an empty list overall: sponsored posts (SPEC_SPONSORED_
         POSTS.md) are visible to every shopper regardless of follow status
@@ -290,9 +416,13 @@ class TestFeed:
         items = r.json()["items"]
         assert len(items) > 0
         for item in items:
-            assert item["created_at"].endswith("+00:00") or item["created_at"].endswith("Z")
+            assert item["created_at"].endswith("+00:00") or item["created_at"].endswith(
+                "Z"
+            )
 
-    def test_feed_shows_followed_store_activity(self, feed_user_token, feed_store_id, feed_followed):
+    def test_feed_shows_followed_store_activity(
+        self, feed_user_token, feed_store_id, feed_followed
+    ):
         """Every item is either from feed_store (followed) or a sponsored
         post (visible platform-wide by design, SPEC_SPONSORED_POSTS.md) —
         and at least one item actually comes from feed_store, proving
@@ -310,11 +440,19 @@ class TestFeed:
         created_ats = [item["created_at"] for item in data["items"]]
         assert created_ats == sorted(created_ats, reverse=True)
 
+        # discount enrichment reaches the shopper-facing /feed too, not just
+        # the store-owner-facing /stores/{id}/updates history
+        coupon_items = [i for i in data["items"] if i["update_type"] == "coupon"]
+        assert len(coupon_items) > 0
+        assert all(i["discount_label"] and i["coupon_code"] for i in coupon_items)
+
     def test_feed_pagination(self, feed_user_token, feed_followed):
         full = client.get("/feed?limit=100", headers=_headers(feed_user_token))
         assert full.status_code == 200, full.text
         total_items = len(full.json()["items"])
-        assert total_items >= 4  # coupon + promotion + 2 flash sales from TestAutoEmission
+        assert (
+            total_items >= 4
+        )  # coupon + promotion + 2 flash sales from TestAutoEmission
 
         page1 = client.get("/feed?limit=2&offset=0", headers=_headers(feed_user_token))
         assert page1.status_code == 200, page1.text
@@ -339,7 +477,8 @@ class TestFeed:
         # a fresh post after marking read should bump unread_count back up
         store_token = _login(FEED_STORE_PHONE)
         post = client.post(
-            "/stores/updates", json={"message": "Fresh unread test post"},
+            "/stores/updates",
+            json={"message": "Fresh unread test post"},
             headers=_headers(store_token),
         )
         assert post.status_code == 201, post.text
@@ -352,6 +491,7 @@ class TestFeed:
 # PER-STORE UPDATE HISTORY (public)
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class TestStoreUpdatesHistory:
 
     def test_list_store_updates_store_not_found(self, feed_user_token):
@@ -359,9 +499,13 @@ class TestStoreUpdatesHistory:
         r = client.get(f"/stores/{fake_id}/updates", headers=_headers(feed_user_token))
         assert r.status_code == 404
 
-    def test_list_store_updates_visible_to_non_follower(self, feed_nonfollower_token, feed_store_id):
+    def test_list_store_updates_visible_to_non_follower(
+        self, feed_nonfollower_token, feed_store_id
+    ):
         """Anyone authenticated can see a store's update history, follower or not —
         it's how a shopper decides whether to follow in the first place."""
-        r = client.get(f"/stores/{feed_store_id}/updates", headers=_headers(feed_nonfollower_token))
+        r = client.get(
+            f"/stores/{feed_store_id}/updates", headers=_headers(feed_nonfollower_token)
+        )
         assert r.status_code == 200, r.text
         assert len(r.json()["items"]) > 0

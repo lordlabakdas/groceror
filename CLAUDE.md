@@ -21,7 +21,7 @@ venv/bin/pytest tests/unit/test_dashboard.py::test_dashboard_response_empty -v
 
 ## Development Workflow
 
-Prefer a git worktree over editing directly in this checkout for any non-trivial change (new features, migrations, anything that leaves the app in a broken intermediate state across multiple commits). Create one on its own branch — e.g. `git worktree add ../groceror-<feature> -b <feature-branch>` — do the work there, and merge/push to `master` once it's ready. Trivial one-off fixes (typos, single-line corrections) can still go straight to `master` in the main checkout.
+Never commit directly to `master`, even for trivial one-off fixes. Always create a git worktree on its own branch — e.g. `git worktree add ../groceror-<feature> -b <feature-branch>` — do the work there, and open a PR into `master` once it's ready.
 
 ## Configuration
 

@@ -17,18 +17,14 @@ cover: a second profiled user (ownership / "not mine" checks), a store
 account with no Store row at all ("profile not set" checks), and a second
 profiled store (stock-alert cross-store ownership checks).
 """
+
 import uuid
 from datetime import date, timedelta
 
 import pytest
 
-from tests.integration.helpers import (
-    _headers,
-    _login,
-    _otp_and_verify,
-    _register,
-    client,
-)
+from tests.integration.helpers import (_headers, _login, _otp_and_verify,
+                                       _register, client)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Unique phone numbers for this file only (own suffix -> no collisions with
@@ -48,7 +44,11 @@ def user2_token():
     token = _login(USER2_PHONE)
     r = client.post(
         "/user/set-profile",
-        json={"name": "Second User", "email": "user2@groceror.test", "location": "User2 City"},
+        json={
+            "name": "Second User",
+            "email": "user2@groceror.test",
+            "location": "User2 City",
+        },
         headers=_headers(token),
     )
     assert r.status_code == 200, r.text
@@ -86,6 +86,7 @@ def store2_id(store2_token):
 # PRODUCT REVIEWS
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class TestProductReviews:
 
     def test_submit_review_requires_profile(self, store_token, inventory_id):
@@ -108,7 +109,9 @@ class TestProductReviews:
         assert r.status_code == 404
         assert r.json()["detail"] == "Item not found"
 
-    def test_submit_review_invalid_rating_too_high(self, user_token, user_profile, inventory_id):
+    def test_submit_review_invalid_rating_too_high(
+        self, user_token, user_profile, inventory_id
+    ):
         r = client.post(
             "/product-reviews",
             json={"inventory_id": inventory_id, "rating": 6},
@@ -116,7 +119,9 @@ class TestProductReviews:
         )
         assert r.status_code == 422
 
-    def test_submit_review_invalid_rating_too_low(self, user_token, user_profile, inventory_id):
+    def test_submit_review_invalid_rating_too_low(
+        self, user_token, user_profile, inventory_id
+    ):
         r = client.post(
             "/product-reviews",
             json={"inventory_id": inventory_id, "rating": 0},
@@ -138,7 +143,9 @@ class TestProductReviews:
         uuid.UUID(data["id"])
         uuid.UUID(data["user_id"])
 
-    def test_submit_review_updates_existing(self, user_token, user_profile, inventory_id):
+    def test_submit_review_updates_existing(
+        self, user_token, user_profile, inventory_id
+    ):
         """Submitting again for the same item updates in place, no duplicate row."""
         first = client.post(
             "/product-reviews",
@@ -148,7 +155,11 @@ class TestProductReviews:
 
         r = client.post(
             "/product-reviews",
-            json={"inventory_id": inventory_id, "rating": 2, "comment": "Changed my mind"},
+            json={
+                "inventory_id": inventory_id,
+                "rating": 2,
+                "comment": "Changed my mind",
+            },
             headers=_headers(user_token),
         )
         assert r.status_code == 200, r.text
@@ -167,10 +178,14 @@ class TestProductReviews:
         assert data["my_review"] is not None
         assert data["my_review"]["rating"] == 2
 
-    def test_get_reviews_my_review_none_without_user_row(self, store_token, user_token, user_profile, inventory_id):
+    def test_get_reviews_my_review_none_without_user_row(
+        self, store_token, user_token, user_profile, inventory_id
+    ):
         """Authenticated as an entity with no User row -> my_review stays None,
         but the review list itself is still populated."""
-        r = client.get(f"/product-reviews/{inventory_id}", headers=_headers(store_token))
+        r = client.get(
+            f"/product-reviews/{inventory_id}", headers=_headers(store_token)
+        )
         assert r.status_code == 200, r.text
         data = r.json()
         assert data["review_count"] == 1
@@ -192,23 +207,33 @@ class TestProductReviews:
         assert r.status_code == 404
         assert r.json()["detail"] == "Review not found"
 
-    def test_delete_review_wrong_owner(self, user_token, user_profile, user2_token, inventory_id):
+    def test_delete_review_wrong_owner(
+        self, user_token, user_profile, user2_token, inventory_id
+    ):
         """A review id that exists, but doesn't belong to the caller -> 404 (not 403)."""
-        mine = client.get(f"/product-reviews/{inventory_id}", headers=_headers(user_token)).json()
+        mine = client.get(
+            f"/product-reviews/{inventory_id}", headers=_headers(user_token)
+        ).json()
         review_id = mine["my_review"]["id"]
 
-        r = client.delete(f"/product-reviews/{review_id}", headers=_headers(user2_token))
+        r = client.delete(
+            f"/product-reviews/{review_id}", headers=_headers(user2_token)
+        )
         assert r.status_code == 404
         assert r.json()["detail"] == "Review not found"
 
     def test_delete_review_success(self, user_token, user_profile, inventory_id):
-        mine = client.get(f"/product-reviews/{inventory_id}", headers=_headers(user_token)).json()
+        mine = client.get(
+            f"/product-reviews/{inventory_id}", headers=_headers(user_token)
+        ).json()
         review_id = mine["my_review"]["id"]
 
         r = client.delete(f"/product-reviews/{review_id}", headers=_headers(user_token))
         assert r.status_code == 204
 
-        after = client.get(f"/product-reviews/{inventory_id}", headers=_headers(user_token)).json()
+        after = client.get(
+            f"/product-reviews/{inventory_id}", headers=_headers(user_token)
+        ).json()
         assert after["review_count"] == 0
         assert after["my_review"] is None
 
@@ -216,6 +241,7 @@ class TestProductReviews:
 # ─────────────────────────────────────────────────────────────────────────────
 # STORE FOLLOW
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class TestStoreFollow:
 
@@ -230,7 +256,9 @@ class TestStoreFollow:
         assert r.status_code == 404
         assert r.json()["detail"] == "Store not found"
 
-    def test_follow_store_success(self, user_token, user_profile, store_id, store_profile):
+    def test_follow_store_success(
+        self, user_token, user_profile, store_id, store_profile
+    ):
         r = client.post(f"/stores/{store_id}/follow", headers=_headers(user_token))
         assert r.status_code == 200, r.text
         data = r.json()
@@ -289,6 +317,7 @@ class TestStoreFollow:
 # WISHLIST
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class TestWishlist:
 
     def test_add_wishlist_requires_profile(self, store_token, inventory_id):
@@ -310,7 +339,9 @@ class TestWishlist:
         assert r.status_code == 404
         assert r.json()["detail"] == "Item not found"
 
-    def test_add_wishlist_success(self, user_token, user_profile, inventory_id, store_id):
+    def test_add_wishlist_success(
+        self, user_token, user_profile, inventory_id, store_id
+    ):
         r = client.post(
             "/wishlist",
             json={"inventory_id": inventory_id},
@@ -395,6 +426,7 @@ class TestWishlist:
 # PRICE ALERTS
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class TestPriceAlerts:
 
     def test_create_price_alert_requires_profile(self, store_token, inventory_id):
@@ -417,7 +449,13 @@ class TestPriceAlerts:
         assert r.json()["detail"] == "Inventory item not found"
 
     def test_create_price_alert_not_yet_triggered(
-        self, user_token, user_profile, store_token, store_profile, inventory_id
+        self,
+        user_token,
+        user_profile,
+        store_token,
+        store_profile,
+        store_id,
+        inventory_id,
     ):
         # Give the item a known, nonzero price first.
         r = client.put(
@@ -439,8 +477,12 @@ class TestPriceAlerts:
         assert data["target_price"] == 5.0
         assert data["is_triggered"] is False
         assert data["is_active"] is True
+        assert data["store_id"] == store_id
+        assert data["store_name"] == "Fresh Market"
 
-    def test_create_price_alert_duplicate_active(self, user_token, user_profile, inventory_id):
+    def test_create_price_alert_duplicate_active(
+        self, user_token, user_profile, inventory_id
+    ):
         r = client.post(
             "/price-alerts",
             json={"inventory_id": inventory_id, "target_price": 5.0},
@@ -449,11 +491,81 @@ class TestPriceAlerts:
         assert r.status_code == 409
         assert r.json()["detail"] == "Active alert already exists for this item"
 
-    def test_list_price_alerts_shows_not_triggered(self, user_token, user_profile, inventory_id):
+    def test_list_price_alerts_shows_not_triggered(
+        self, user_token, user_profile, inventory_id
+    ):
         r = client.get("/price-alerts", headers=_headers(user_token))
         assert r.status_code == 200, r.text
         alert = next(a for a in r.json() if a["inventory_id"] == inventory_id)
         assert alert["is_triggered"] is False
+
+    def test_update_price_alert_not_found(self, user_token, user_profile):
+        fake_id = str(uuid.uuid4())
+        r = client.patch(
+            f"/price-alerts/{fake_id}",
+            json={"target_price": 1.0},
+            headers=_headers(user_token),
+        )
+        assert r.status_code == 404
+        assert r.json()["detail"] == "Alert not found"
+
+    def test_update_price_alert_wrong_owner(
+        self, user_token, user_profile, user2_token, inventory_id
+    ):
+        alerts = client.get("/price-alerts", headers=_headers(user_token)).json()
+        alert = next(a for a in alerts if a["inventory_id"] == inventory_id)
+
+        r = client.patch(
+            f"/price-alerts/{alert['id']}",
+            json={"target_price": 1.0},
+            headers=_headers(user2_token),
+        )
+        assert r.status_code == 404
+        assert r.json()["detail"] == "Alert not found"
+
+    def test_update_price_alert_changes_target_and_stays_watching(
+        self, user_token, user_profile, inventory_id
+    ):
+        """inventory_id is currently priced at 10.0 (set earlier in this class)."""
+        alerts = client.get("/price-alerts", headers=_headers(user_token)).json()
+        alert = next(a for a in alerts if a["inventory_id"] == inventory_id)
+
+        r = client.patch(
+            f"/price-alerts/{alert['id']}",
+            json={"target_price": 6.0},
+            headers=_headers(user_token),
+        )
+        assert r.status_code == 200, r.text
+        data = r.json()
+        assert data["target_price"] == 6.0
+        assert data["is_triggered"] is False
+
+    def test_update_price_alert_triggers_when_target_meets_current_price(
+        self, user_token, user_profile, inventory_id
+    ):
+        alerts = client.get("/price-alerts", headers=_headers(user_token)).json()
+        alert = next(a for a in alerts if a["inventory_id"] == inventory_id)
+
+        r = client.patch(
+            f"/price-alerts/{alert['id']}",
+            json={"target_price": 10.0},
+            headers=_headers(user_token),
+        )
+        assert r.status_code == 200, r.text
+        data = r.json()
+        assert data["target_price"] == 10.0
+        assert data["is_triggered"] is True
+
+        # Reset back to the original target_price (5.0, set at creation) so the
+        # later test_price_alert_triggers_on_price_drop (which drops the price
+        # to exactly 5.0) still sees an untriggered -> triggered transition.
+        r = client.patch(
+            f"/price-alerts/{alert['id']}",
+            json={"target_price": 5.0},
+            headers=_headers(user_token),
+        )
+        assert r.status_code == 200, r.text
+        assert r.json()["is_triggered"] is False
 
     def test_price_alert_triggers_on_price_drop(
         self, user_token, user_profile, store_token, store_profile, inventory_id
@@ -476,7 +588,12 @@ class TestPriceAlerts:
         """A target_price at/above the current price triggers immediately."""
         r = client.post(
             "/inventory/add-inventory",
-            json={"name": "Bananas Alert Test", "quantity": 15, "category": "PRODUCE", "price": 2.0},
+            json={
+                "name": "Bananas Alert Test",
+                "quantity": 15,
+                "category": "PRODUCE",
+                "price": 2.0,
+            },
             headers=_headers(store_token),
         )
         assert r.status_code == 200, r.text
@@ -508,11 +625,24 @@ class TestPriceAlerts:
         alerts = client.get("/price-alerts", headers=_headers(user_token)).json()
         assert all(a["id"] != alert["id"] for a in alerts)
 
-    def test_delete_price_alert_wrong_owner(self, user_token, user_profile, user2_token, store_token, store_profile, store_id):
+    def test_delete_price_alert_wrong_owner(
+        self,
+        user_token,
+        user_profile,
+        user2_token,
+        store_token,
+        store_profile,
+        store_id,
+    ):
         """An alert that exists but belongs to someone else -> 404 (not 403)."""
         r = client.post(
             "/inventory/add-inventory",
-            json={"name": "Cherries Alert Test", "quantity": 5, "category": "PRODUCE", "price": 3.0},
+            json={
+                "name": "Cherries Alert Test",
+                "quantity": 5,
+                "category": "PRODUCE",
+                "price": 3.0,
+            },
             headers=_headers(store_token),
         )
         cherry_id = r.json()["inventory_id"]
@@ -531,6 +661,7 @@ class TestPriceAlerts:
 # STOCK ALERTS
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class TestStockAlerts:
 
     def test_list_stock_alerts_requires_store_account(self, user2_token):
@@ -545,7 +676,9 @@ class TestStockAlerts:
 
     def test_acknowledge_requires_store_account(self, user2_token):
         fake_id = str(uuid.uuid4())
-        r = client.post(f"/stock-alerts/{fake_id}/acknowledge", headers=_headers(user2_token))
+        r = client.post(
+            f"/stock-alerts/{fake_id}/acknowledge", headers=_headers(user2_token)
+        )
         assert r.status_code == 403
         assert r.json()["detail"] == "Store account required"
 
@@ -554,7 +687,9 @@ class TestStockAlerts:
         assert r.status_code == 200, r.text
         assert r.json() == []
 
-    def test_set_threshold_and_trigger_alert(self, store_token, store_profile, inventory_id):
+    def test_set_threshold_and_trigger_alert(
+        self, store_token, store_profile, inventory_id
+    ):
         r = client.put(
             f"/inventory/{inventory_id}/threshold",
             json={"threshold": 20},
@@ -584,15 +719,21 @@ class TestStockAlerts:
 
     def test_acknowledge_alert_not_found(self, store_token, store_profile):
         fake_id = str(uuid.uuid4())
-        r = client.post(f"/stock-alerts/{fake_id}/acknowledge", headers=_headers(store_token))
+        r = client.post(
+            f"/stock-alerts/{fake_id}/acknowledge", headers=_headers(store_token)
+        )
         assert r.status_code == 404
         assert r.json()["detail"] == "Alert not found"
 
-    def test_acknowledge_alert_wrong_store(self, store_token, store_profile, store2_token, store2_id):
+    def test_acknowledge_alert_wrong_store(
+        self, store_token, store_profile, store2_token, store2_id
+    ):
         alerts = client.get("/stock-alerts", headers=_headers(store_token)).json()
         alert_id = alerts[0]["id"]
 
-        r = client.post(f"/stock-alerts/{alert_id}/acknowledge", headers=_headers(store2_token))
+        r = client.post(
+            f"/stock-alerts/{alert_id}/acknowledge", headers=_headers(store2_token)
+        )
         assert r.status_code == 403
         assert r.json()["detail"] == "Not your inventory"
 
@@ -600,7 +741,9 @@ class TestStockAlerts:
         alerts = client.get("/stock-alerts", headers=_headers(store_token)).json()
         alert = next(a for a in alerts if a["inventory_id"] == inventory_id)
 
-        r = client.post(f"/stock-alerts/{alert['id']}/acknowledge", headers=_headers(store_token))
+        r = client.post(
+            f"/stock-alerts/{alert['id']}/acknowledge", headers=_headers(store_token)
+        )
         assert r.status_code == 200, r.text
         data = r.json()
         assert data["is_triggered"] is False

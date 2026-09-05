@@ -70,30 +70,12 @@ class ProfileResponse(BaseModel):
     geocoded: Optional[bool] = None
 
 
-class FirebaseRegistrationPayload(BaseModel):
-    email: str
-    password: str
-
-
-class FirebaseRegistrationResponse(BaseModel):
-    user_id: str
-
-
 class LoginPayload(BaseModel):
     phone: str
     password: str
 
 
 class LoginResponse(BaseModel):
-    token: str
-
-
-class FirebaseLoginPayload(BaseModel):
-    email: str
-    password: str
-
-
-class FirebaseLoginResponse(BaseModel):
     token: str
 
 

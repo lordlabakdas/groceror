@@ -132,7 +132,7 @@ class TestCheckoutAndWebhook:
 
 
 class TestLockEnforcement:
-    def test_locked_store_blocks_mutations_but_not_reads(self):
+    def test_expired_grace_does_not_block_mutations_or_reads(self):
         token, store_id = _create_store("4")
 
         sub = db_session.exec(select(Subscription).where(Subscription.store_id == uuid.UUID(store_id))).first()
@@ -141,19 +141,18 @@ class TestLockEnforcement:
         db_session.add(sub)
         db_session.commit()
 
-        # Read endpoint stays open and, as a side effect of the lazy
-        # recompute (§3.2), flips this store to locked.
+        # Expired grace no longer locks the store.
         r = client.get("/subscription/status", headers=_headers(token))
         assert r.status_code == 200
-        assert r.json()["status"] == "locked"
+        assert r.json()["status"] == "grace"
 
-        # Mutation endpoint is now blocked.
+        # Mutations remain available without subscription payment.
         r = client.post(
             "/coupons",
             json={"code": f"LOCKED{_suffix}", "discount_type": "fixed", "discount_value": 5},
             headers=_headers(token),
         )
-        assert r.status_code == 402
+        assert r.status_code == 201, r.text
 
         # But the store's own order-facing read endpoint (a stand-in for
         # "can still fulfill orders already placed") stays open.

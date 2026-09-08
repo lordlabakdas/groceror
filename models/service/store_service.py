@@ -108,13 +108,10 @@ class StoreService:
         return self.update_store(store_id, is_active=True)
 
     def get_all_active_stores(self) -> List[Store]:
-        # is_billing_locked is separate from is_active — a store that's
-        # paused (owner's own choice) or billing-locked (unpaid) is equally
-        # invisible to buyers, but the two flags mean different things.
-        # See SPEC_SUBSCRIPTION.md §3.1.
-        return db_session.exec(
-            select(Store).where(Store.is_active == True, Store.is_billing_locked == False)
-        ).all()
+        query = select(Store).where(Store.is_active == True)
+        if subscription_service.SUBSCRIPTION_ENFORCEMENT_ENABLED:
+            query = query.where(Store.is_billing_locked == False)
+        return db_session.exec(query).all()
 
     def search_stores(self, query: str) -> List[Store]:
         return db_session.exec(

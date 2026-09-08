@@ -42,6 +42,8 @@ logger = logging.getLogger(__name__)
 # here, not via migration. (Plan *price* is DB-backed and admin-editable,
 # §3.1/§3.5 — these two are not, since changing them retroactively for an
 # in-flight trial/grace period would be a much bigger behavior change.)
+SUBSCRIPTION_ENFORCEMENT_ENABLED = False
+
 TRIAL_DAYS = 14
 GRACE_DAYS = 7
 
@@ -120,6 +122,7 @@ def _get_subscription(store_id: UUID) -> Subscription:
 
 
 def _sync_store_lock(store_id: UUID, locked: bool) -> None:
+    locked = locked and SUBSCRIPTION_ENFORCEMENT_ENABLED
     store = db_session.exec(select(Store).where(Store.id == store_id)).first()
     if store and store.is_billing_locked != locked:
         store.is_billing_locked = locked
@@ -132,6 +135,8 @@ def _send_grace_email(sub: Subscription) -> None:
     """Principle V: a Resend outage must not block the state transition
     that triggered this. One email on entering grace, not a sequence
     (Out of Scope, SPEC_SUBSCRIPTION.md §8)."""
+    if not SUBSCRIPTION_ENFORCEMENT_ENABLED:
+        return
     store = db_session.exec(select(Store).where(Store.id == sub.store_id)).first()
     if not store:
         return
@@ -165,6 +170,9 @@ def _enter_grace(sub: Subscription) -> None:
 
 
 def _recompute_status(sub: Subscription) -> Subscription:
+    if not SUBSCRIPTION_ENFORCEMENT_ENABLED:
+        _sync_store_lock(sub.store_id, locked=False)
+        return sub
     now = datetime.utcnow()
     if sub.status == "trialing" and now > sub.trial_end and not sub.razorpay_subscription_id:
         # Trial lapsed with no checkout ever attempted.
@@ -187,6 +195,8 @@ def get_status_for_store(store_id: UUID) -> Subscription:
 def assert_billing_ok(store: Store) -> None:
     """Gate for mutation endpoints (§3.3). Read endpoints don't call this —
     a locked owner must still be able to see their data and reach billing."""
+    if not SUBSCRIPTION_ENFORCEMENT_ENABLED:
+        return
     sub = get_status_for_store(store.id)
     if sub.status == "locked":
         raise HTTPException(

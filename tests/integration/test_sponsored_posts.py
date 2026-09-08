@@ -132,20 +132,20 @@ class TestCreateSponsoredPost:
         assert data["amount_paise"] == 19900
         assert data["razorpay_order_id"] in fake_provider.orders
 
-    def test_create_blocked_when_billing_locked(self, sp_store_token, sp_store_id):
+    def test_create_allowed_when_subscription_grace_expires(self, sp_store_token, sp_store_id):
         sub = db_session.exec(select(Subscription).where(Subscription.store_id == uuid.UUID(sp_store_id))).first()
         sub.status = "grace"
         sub.grace_period_end = datetime.utcnow() - timedelta(days=1)  # already expired
         db_session.add(sub)
         db_session.commit()
 
-        # Trigger the lazy recompute (SPEC_SUBSCRIPTION.md §3.2) -> locked.
+        # Reading an expired subscription no longer locks the store.
         client.get("/subscription/status", headers=_headers(sp_store_token))
 
         fake_provider = FakeBillingProvider()
         with patch("models.service.sponsored_post_service.get_billing_provider", return_value=fake_provider):
             r = client.post("/stores/sponsored-posts", json={"message": "should fail"}, headers=_headers(sp_store_token))
-        assert r.status_code == 402
+        assert r.status_code == 201, r.text
 
         # Unlock again so later tests in this module aren't affected.
         subscription_service.admin_unlock(uuid.UUID(sp_store_id))

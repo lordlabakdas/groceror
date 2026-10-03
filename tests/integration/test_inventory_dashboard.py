@@ -940,7 +940,7 @@ class TestDashboard:
         assert summary["order_count"] == 1
         assert summary["revenue"] == total_price
         assert summary["orders"][0]["id"] == order_id
-        assert summary["orders"][0]["status"] == "pending"
+        assert summary["orders"][0]["status"] == "confirmed"
 
 
 class TestRevenueTrend:

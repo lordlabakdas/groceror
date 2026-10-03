@@ -11,6 +11,7 @@ def _make_zone(store_id, lat=12.97, lng=77.59):
     zone.store_id = store_id
     zone.latitude = lat
     zone.longitude = lng
+    zone.radius_km = 10
     return zone
 
 
@@ -29,7 +30,7 @@ def test_get_quote_returns_provider_quote():
         mock_get_provider.return_value = mock_provider
 
         quote = DeliveryService().get_quote(
-            store_id, dropoff_lat=13.0, dropoff_lng=80.2
+            store_id, dropoff_lat=12.98, dropoff_lng=77.60
         )
 
         assert quote is fake_quote
@@ -43,7 +44,7 @@ def test_get_quote_raises_if_store_has_no_delivery_zone():
         mock_db.exec.return_value.first.return_value = None
 
         with pytest.raises(ValueError, match="delivery zone"):
-            DeliveryService().get_quote(uuid4(), dropoff_lat=13.0, dropoff_lng=80.2)
+            DeliveryService().get_quote(uuid4(), dropoff_lat=12.98, dropoff_lng=77.60)
 
 
 def test_get_quote_wraps_provider_unavailable_error():
@@ -61,7 +62,7 @@ def test_get_quote_wraps_provider_unavailable_error():
         mock_get_provider.return_value = mock_provider
 
         with pytest.raises(ValueError, match="not serviceable"):
-            DeliveryService().get_quote(store_id, dropoff_lat=0.0, dropoff_lng=0.0)
+            DeliveryService().get_quote(store_id, dropoff_lat=12.98, dropoff_lng=77.60)
 
 
 def test_request_delivery_raises_if_order_not_found():
@@ -196,3 +197,15 @@ def test_apply_webhook_update_marks_order_delivered():
         assert delivery.status == "delivered"
         assert delivery.rider_name == "Ravi"
         assert order.status == "delivered"
+
+
+def test_get_quote_rejects_outside_store_radius_before_calling_provider():
+    from models.service.delivery_service import DeliveryService
+
+    with patch("models.service.delivery_service.db_session") as db, patch(
+        "models.service.delivery_service.get_delivery_provider"
+    ) as provider:
+        db.exec.return_value.first.return_value = _make_zone(uuid4())
+        with pytest.raises(ValueError, match="Location Unserviceable"):
+            DeliveryService().get_quote(uuid4(), 18.5204, 73.8567)
+        provider.assert_not_called()

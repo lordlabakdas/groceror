@@ -10,7 +10,7 @@ VALID_STATUSES = {"pending", "confirmed", "ready", "delivered", "cancelled"}
 
 class OrderLineItem(BaseModel):
     inventory_id: UUID
-    quantity: int = 1
+    quantity: int = Field(default=1, ge=1)
 
 
 class CreateOrderRequest(BaseModel):
@@ -22,8 +22,8 @@ class CreateOrderRequest(BaseModel):
     # for why this re-quotes server-side rather than taking a client-supplied
     # fee or quote_id.
     delivery_address_line: Optional[str] = None
-    delivery_lat: Optional[float] = None
-    delivery_lng: Optional[float] = None
+    delivery_lat: Optional[float] = Field(default=None, ge=-90, le=90)
+    delivery_lng: Optional[float] = Field(default=None, ge=-180, le=180)
 
 
 class OrderCreatedResponse(BaseModel):
@@ -98,8 +98,8 @@ class UpdateOrderStatusResponse(BaseModel):
 
 class DeliveryQuoteRequest(BaseModel):
     store_id: UUID
-    dropoff_lat: float
-    dropoff_lng: float
+    dropoff_lat: float = Field(ge=-90, le=90)
+    dropoff_lng: float = Field(ge=-180, le=180)
 
 
 class DeliveryQuoteResponse(BaseModel):

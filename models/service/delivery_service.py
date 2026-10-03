@@ -35,12 +35,18 @@ DEFAULT_ORDER_WEIGHT_KG = 5.0
 
 
 class DeliveryService:
-    def _pickup_point(self, store_id: UUID) -> Coordinates:
+    def _pickup_point(self, store_id: UUID, dropoff: Coordinates | None = None) -> Coordinates:
         zone = db_session.exec(
             select(DeliveryZone).where(DeliveryZone.store_id == store_id)
         ).first()
         if not zone:
-            raise ValueError("Store has not configured a delivery zone")
+            raise ValueError("Location Unserviceable: store has not configured a delivery zone")
+        if dropoff is not None:
+            from api.delivery_zone_api import _haversine
+
+            distance = _haversine(zone.latitude, zone.longitude, dropoff.lat, dropoff.lng)
+            if distance > zone.radius_km:
+                raise ValueError("Location Unserviceable: this address is not serviceable by this store")
         return Coordinates(lat=zone.latitude, lng=zone.longitude)
 
     def get_quote(
@@ -48,8 +54,8 @@ class DeliveryService:
     ) -> Quote:
         """Raises ValueError if the store has no delivery zone configured or
         the dropoff isn't serviceable."""
-        pickup = self._pickup_point(store_id)
         dropoff = Coordinates(lat=dropoff_lat, lng=dropoff_lng)
+        pickup = self._pickup_point(store_id, dropoff)
         try:
             return get_delivery_provider().get_quote(
                 pickup, dropoff, DEFAULT_ORDER_WEIGHT_KG

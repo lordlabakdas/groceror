@@ -39,3 +39,12 @@ def test_store_order_line_item():
     from api.validators.order_validation import StoreOrderLineItem
     item = StoreOrderLineItem(inventory_id=uuid4(), name="Milk", quantity=1, price=2.00)
     assert item.name == "Milk"
+
+
+@pytest.mark.parametrize("quantity", [0, -1])
+def test_order_line_item_rejects_nonpositive_quantity(quantity):
+    from api.validators.order_validation import OrderLineItem
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError):
+        OrderLineItem(inventory_id=uuid4(), quantity=quantity)

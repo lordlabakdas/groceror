@@ -167,7 +167,7 @@ class TestOrderHistory:
         assert match is not None
         assert match["store_id"] == promo_store_id
         assert match["store_name"] == promo_store_profile["name"]
-        assert match["status"] == "pending"
+        assert match["status"] == "confirmed"
         assert len(match["items"]) == 1
         item = match["items"][0]
         assert item["inventory_id"] == promo_inventory_id
@@ -180,6 +180,39 @@ class TestOrderHistory:
 # ─────────────────────────────────────────────────────────────────────────────
 
 class TestCreateOrderErrors:
+
+    def test_stock_is_reserved_and_duplicate_lines_cannot_oversell(
+        self, promo_user_token, promo_user_profile, promo_store_token, promo_store_id,
+        promo_store_profile,
+    ):
+        response = client.post(
+            "/inventory/add-inventory",
+            json={"name": "Last stock", "quantity": 3, "category": "PRODUCE", "price": 2},
+            headers=_headers(promo_store_token),
+        )
+        assert response.status_code == 200, response.text
+        inventory_id = response.json()["inventory_id"]
+        with patch("engine.mailer.Mailer.send"):
+            order = client.post(
+                "/order/create-order",
+                json={"items": [{"inventory_id": inventory_id, "quantity": 2}]},
+                headers=_headers(promo_user_token),
+            )
+        assert order.status_code == 200, order.text
+        assert order.json()["status"] == "confirmed"
+        refused = client.post(
+            "/order/create-order",
+            json={"items": [{"inventory_id": inventory_id, "quantity": 1}] * 2},
+            headers=_headers(promo_user_token),
+        )
+        assert refused.status_code == 400
+        assert "Insufficient stock" in refused.json()["detail"]
+        inventory = client.get(
+            f"/inventory/browse/{promo_store_id}", headers=_headers(promo_user_token)
+        ).json()["inventory"]
+        assert next(item for item in inventory if item["id"] == inventory_id)["quantity"] == 1
+        history = client.get("/order/history", headers=_headers(promo_user_token)).json()["orders"]
+        assert sum(any(item["inventory_id"] == inventory_id for item in entry["items"]) for entry in history) == 1
 
     def test_create_order_missing_inventory(self, promo_user_token, promo_user_profile):
         fake_id = str(uuid.uuid4())
@@ -229,7 +262,7 @@ class TestCreateOrderErrors:
                 headers=_headers(promo_user_token),
             )
         assert r.status_code == 200
-        assert r.json()["status"] == "pending"
+        assert r.json()["status"] == "confirmed"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -284,7 +317,7 @@ class TestStoreOrders:
         orders = r2.json()["orders"]
         match = next((o for o in orders if o["id"] == order_id), None)
         assert match is not None
-        assert match["status"] == "pending"
+        assert match["status"] == "confirmed"
         assert len(match["items"]) == 1
         assert match["items"][0]["inventory_id"] == promo_inventory_id
         assert match["items"][0]["quantity"] == 2

@@ -416,7 +416,7 @@ class TestOrders:
         assert r.status_code == 200
         data = r.json()
         assert "id" in data
-        assert data["status"] == "pending"
+        assert data["status"] == "confirmed"
         mock_send.assert_called_once()
         kw = mock_send.call_args.kwargs
         assert kw["recipient"] == user_profile["email"]

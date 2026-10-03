@@ -91,7 +91,11 @@ class OrderService:
         """Create order, apply coupon/points, award points. Returns (order, points_earned)."""
         inv_ids = [item.inventory_id for item in order.items]
         inventory_rows = db_session.exec(
-            select(Inventory).where(Inventory.id.in_(inv_ids))
+            select(Inventory)
+            .where(Inventory.id.in_(inv_ids))
+            .order_by(Inventory.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
         ).all()
         inventory_map = {inv.id: inv for inv in inventory_rows}
 
@@ -214,7 +218,8 @@ class OrderService:
                 discount_amount=round(total_discount, 2),
                 points_redeemed=points_redeemed,
                 coupon_code=coupon_code,
-                status="pending",
+                # Stock is locked and reserved in this transaction.
+                status="confirmed",
                 delivery_fee=delivery_fee,
                 delivery_address_line=order.delivery_address_line,
                 delivery_lat=order.delivery_lat,

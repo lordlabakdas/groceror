@@ -102,7 +102,7 @@ class TestDeliveryQuote:
         ):
             r = client.post(
                 "/order/delivery-quote",
-                json={"store_id": store_id, "dropoff_lat": 13.0, "dropoff_lng": 80.2},
+                json={"store_id": store_id, "dropoff_lat": 12.98, "dropoff_lng": 77.60},
                 headers=_headers(shopper_token),
             )
         assert r.status_code == 200, r.text
@@ -132,7 +132,7 @@ class TestDeliveryQuote:
     def test_quote_requires_auth(self, store_id):
         r = client.post(
             "/order/delivery-quote",
-            json={"store_id": store_id, "dropoff_lat": 13.0, "dropoff_lng": 80.2},
+            json={"store_id": store_id, "dropoff_lat": 12.98, "dropoff_lng": 77.60},
         )
         assert r.status_code in (401, 403)
 
@@ -148,8 +148,8 @@ class TestOrderCreationWithDelivery:
                 json={
                     "items": [{"inventory_id": inventory_id, "quantity": 2}],
                     "delivery_address_line": "12 Anna Salai",
-                    "delivery_lat": 13.0,
-                    "delivery_lng": 80.2,
+                    "delivery_lat": 12.98,
+                    "delivery_lng": 77.60,
                 },
                 headers=_headers(shopper_token),
             )
@@ -157,6 +157,28 @@ class TestOrderCreationWithDelivery:
         body = r.json()
         assert body["delivery_fee"] == 45.0
         assert body["total_price"] == pytest.approx(2 * 2.0 + 45.0)
+
+    def test_unserviceable_delivery_does_not_create_order_or_consume_stock(
+        self, shopper_token, inventory_id, store_id
+    ):
+        inventory_url = f"/inventory/browse/{store_id}"
+        before = client.get(inventory_url, headers=_headers(shopper_token)).json()
+        history_before = client.get("/order/history", headers=_headers(shopper_token)).json()
+        with patch("models.service.delivery_service.get_delivery_provider") as provider:
+            response = client.post(
+                "/order/create-order",
+                json={
+                    "items": [{"inventory_id": inventory_id, "quantity": 1}],
+                    "delivery_lat": 18.5204,
+                    "delivery_lng": 73.8567,
+                },
+                headers=_headers(shopper_token),
+            )
+        assert response.status_code == 400
+        assert "Location Unserviceable" in response.json()["detail"]
+        provider.assert_not_called()
+        assert client.get(inventory_url, headers=_headers(shopper_token)).json() == before
+        assert client.get("/order/history", headers=_headers(shopper_token)).json() == history_before
 
     def test_create_order_without_delivery_has_no_fee(
         self, shopper_token, inventory_id
@@ -186,8 +208,8 @@ class TestRequestDelivery:
                 json={
                     "items": [{"inventory_id": inventory_id, "quantity": 1}],
                     "delivery_address_line": "12 Anna Salai",
-                    "delivery_lat": 13.0,
-                    "delivery_lng": 80.2,
+                    "delivery_lat": 12.98,
+                    "delivery_lng": 77.60,
                 },
                 headers=_headers(shopper_token),
             )

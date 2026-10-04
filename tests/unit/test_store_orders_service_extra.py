@@ -82,7 +82,7 @@ def test_create_order_coupon_not_found_raises():
     fake_inv = _make_inventory(inv_id, store_id)
 
     with patch("models.service.orders_service.db_session") as mock_db:
-        mock_db.exec.side_effect = [_all([fake_inv]), _first(None)]
+        mock_db.exec.side_effect = [_all([fake_inv]), _first(None), _first(None)]
         user = MagicMock(id=uuid4())
         req = CreateOrderRequest(
             items=[OrderLineItem(inventory_id=inv_id, quantity=2)],
@@ -101,7 +101,7 @@ def test_create_order_coupon_inactive_raises():
     coupon = _make_coupon(is_active=False)
 
     with patch("models.service.orders_service.db_session") as mock_db:
-        mock_db.exec.side_effect = [_all([fake_inv]), _first(coupon)]
+        mock_db.exec.side_effect = [_all([fake_inv]), _first(None), _first(coupon)]
         user = MagicMock(id=uuid4())
         req = CreateOrderRequest(
             items=[OrderLineItem(inventory_id=inv_id, quantity=2)],
@@ -120,7 +120,7 @@ def test_create_order_coupon_not_yet_active_raises():
     coupon = _make_coupon(valid_from=date(2999, 1, 1))
 
     with patch("models.service.orders_service.db_session") as mock_db:
-        mock_db.exec.side_effect = [_all([fake_inv]), _first(coupon)]
+        mock_db.exec.side_effect = [_all([fake_inv]), _first(None), _first(coupon)]
         user = MagicMock(id=uuid4())
         req = CreateOrderRequest(
             items=[OrderLineItem(inventory_id=inv_id, quantity=2)],
@@ -139,7 +139,7 @@ def test_create_order_coupon_expired_raises():
     coupon = _make_coupon(valid_until=date(2000, 1, 1))
 
     with patch("models.service.orders_service.db_session") as mock_db:
-        mock_db.exec.side_effect = [_all([fake_inv]), _first(coupon)]
+        mock_db.exec.side_effect = [_all([fake_inv]), _first(None), _first(coupon)]
         user = MagicMock(id=uuid4())
         req = CreateOrderRequest(
             items=[OrderLineItem(inventory_id=inv_id, quantity=2)],
@@ -158,7 +158,7 @@ def test_create_order_coupon_usage_limit_reached_raises():
     coupon = _make_coupon(max_uses=5, uses_count=5)
 
     with patch("models.service.orders_service.db_session") as mock_db:
-        mock_db.exec.side_effect = [_all([fake_inv]), _first(coupon)]
+        mock_db.exec.side_effect = [_all([fake_inv]), _first(None), _first(coupon)]
         user = MagicMock(id=uuid4())
         req = CreateOrderRequest(
             items=[OrderLineItem(inventory_id=inv_id, quantity=2)],
@@ -177,7 +177,7 @@ def test_create_order_coupon_min_order_amount_not_met_raises():
     coupon = _make_coupon(min_order_amount=100.0)
 
     with patch("models.service.orders_service.db_session") as mock_db:
-        mock_db.exec.side_effect = [_all([fake_inv]), _first(coupon)]
+        mock_db.exec.side_effect = [_all([fake_inv]), _first(None), _first(coupon)]
         user = MagicMock(id=uuid4())
         req = CreateOrderRequest(
             items=[OrderLineItem(inventory_id=inv_id, quantity=2)],  # subtotal 5.00
@@ -196,7 +196,7 @@ def test_create_order_coupon_wrong_store_raises():
     coupon = _make_coupon(store_id=uuid4())  # different store
 
     with patch("models.service.orders_service.db_session") as mock_db:
-        mock_db.exec.side_effect = [_all([fake_inv]), _first(coupon)]
+        mock_db.exec.side_effect = [_all([fake_inv]), _first(None), _first(coupon)]
         user = MagicMock(id=uuid4())
         req = CreateOrderRequest(
             items=[OrderLineItem(inventory_id=inv_id, quantity=2)],
@@ -216,9 +216,12 @@ def test_create_order_coupon_percent_discount_applied():
     acct = _make_loyalty_account(points_balance=0)
 
     with patch("models.service.orders_service.db_session") as mock_db:
-        # coupon lookup, tier lifetime-spend lookup (no prior spend), then the
-        # unconditional loyalty-account lookup inside the try block.
-        mock_db.exec.side_effect = [_all([fake_inv]), _first(coupon), _first(None), _first(acct)]
+        # cart lookup (no active reservation cart), coupon lookup, tier
+        # lifetime-spend lookup (no prior spend), then the unconditional
+        # loyalty-account lookup inside the try block.
+        mock_db.exec.side_effect = [
+            _all([fake_inv]), _first(None), _first(coupon), _first(None), _first(acct),
+        ]
         user = MagicMock(id=uuid4())
         req = CreateOrderRequest(
             items=[OrderLineItem(inventory_id=inv_id, quantity=2)],  # subtotal 5.00
@@ -244,7 +247,9 @@ def test_create_order_coupon_fixed_discount_applied():
     acct = _make_loyalty_account(points_balance=0)
 
     with patch("models.service.orders_service.db_session") as mock_db:
-        mock_db.exec.side_effect = [_all([fake_inv]), _first(coupon), _first(None), _first(acct)]
+        mock_db.exec.side_effect = [
+            _all([fake_inv]), _first(None), _first(coupon), _first(None), _first(acct),
+        ]
         user = MagicMock(id=uuid4())
         req = CreateOrderRequest(
             items=[OrderLineItem(inventory_id=inv_id, quantity=2)],  # subtotal 5.00
@@ -272,7 +277,7 @@ def test_create_order_insufficient_points_raises():
     acct = _make_loyalty_account(points_balance=10)
 
     with patch("models.service.orders_service.db_session") as mock_db:
-        mock_db.exec.side_effect = [_all([fake_inv]), _first(acct)]
+        mock_db.exec.side_effect = [_all([fake_inv]), _first(None), _first(acct)]
         user = MagicMock(id=uuid4())
         req = CreateOrderRequest(
             items=[OrderLineItem(inventory_id=inv_id, quantity=1)],
@@ -291,10 +296,13 @@ def test_create_order_redeems_points_and_awards_new_points():
     acct = _make_loyalty_account(points_balance=100, total_earned=0, total_redeemed=0)
 
     with patch("models.service.orders_service.db_session") as mock_db:
-        # validation lookup, tier lifetime-spend lookup (no prior spend), then
-        # the unconditional lookup inside the try block — first and third
-        # resolve to the same loyalty account object.
-        mock_db.exec.side_effect = [_all([fake_inv]), _first(acct), _first(None), _first(acct)]
+        # cart lookup (no active reservation cart), validation lookup, tier
+        # lifetime-spend lookup (no prior spend), then the unconditional
+        # lookup inside the try block — second and fourth resolve to the
+        # same loyalty account object.
+        mock_db.exec.side_effect = [
+            _all([fake_inv]), _first(None), _first(acct), _first(None), _first(acct),
+        ]
         user = MagicMock(id=uuid4())
         req = CreateOrderRequest(
             items=[OrderLineItem(inventory_id=inv_id, quantity=4)],  # subtotal 10.00
@@ -324,7 +332,7 @@ def test_create_order_rolls_back_and_reraises_on_db_error():
     fake_inv = _make_inventory(inv_id, store_id, price=2.50)
 
     with patch("models.service.orders_service.db_session") as mock_db:
-        mock_db.exec.side_effect = [_all([fake_inv]), _first(None), _first(None)]
+        mock_db.exec.side_effect = [_all([fake_inv]), _first(None), _first(None), _first(None)]
         mock_db.commit.side_effect = Exception("db exploded")
         user = MagicMock(id=uuid4())
         req = CreateOrderRequest(items=[OrderLineItem(inventory_id=inv_id, quantity=1)])

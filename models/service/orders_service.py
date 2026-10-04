@@ -6,7 +6,7 @@ from uuid import UUID, uuid4
 
 from sqlmodel import select, func
 
-from api.validators.order_validation import CreateOrderRequest
+from api.validators.order_validation import CreateOrderRequest, ORDER_STATUS_TRANSITIONS
 from models.db import db_session
 from models.entity.coupon_entity import Coupon
 from models.entity.inventory_entity import Inventory
@@ -330,6 +330,10 @@ class OrderService:
         ).all()
 
     def update_order_status(self, order_id: UUID, store_id: UUID, new_status: str) -> OrderEntity:
+        """Raises ValueError for a transition the current status doesn't allow
+        (e.g. re-opening a delivered order). Cancellation is special-cased to
+        restock inventory and reverse any loyalty points/coupon use tied to
+        the order — see _cancel_order()."""
         order = db_session.exec(
             select(OrderEntity)
             .where(OrderEntity.id == order_id)
@@ -337,7 +341,81 @@ class OrderService:
         ).first()
         if not order:
             return None
+        if new_status not in ORDER_STATUS_TRANSITIONS.get(order.status, set()):
+            raise ValueError(
+                f"Cannot transition order from '{order.status}' to '{new_status}'"
+            )
+        if new_status == order.status:
+            return order
+        if new_status == "cancelled":
+            return self._cancel_order(order)
         order.status = new_status
         db_session.commit()
         db_session.refresh(order)
         return order
+
+    def _cancel_order(self, order: OrderEntity) -> OrderEntity:
+        """Restocks inventory, reverses loyalty points earned/redeemed on the
+        order, and frees up its coupon use — so a cancelled order leaves no
+        side effects behind, matching a store's "no charge stands" cancel."""
+        try:
+            items = db_session.exec(
+                select(OrderItem).where(OrderItem.order_id == order.id)
+            ).all()
+            for item in items:
+                inv = db_session.exec(
+                    select(Inventory).where(Inventory.id == item.inventory_id).with_for_update()
+                ).first()
+                if inv:
+                    inv.quantity += item.quantity
+                    db_session.add(inv)
+
+            acct = _get_or_create_loyalty_account(order.user_id)
+
+            earned_txn = db_session.exec(
+                select(LoyaltyTransaction).where(
+                    LoyaltyTransaction.order_id == order.id,
+                    LoyaltyTransaction.transaction_type == "earned",
+                )
+            ).first()
+            if earned_txn:
+                acct.points_balance -= earned_txn.points
+                acct.total_earned -= earned_txn.points
+                db_session.add(LoyaltyTransaction(
+                    user_id=order.user_id,
+                    order_id=order.id,
+                    points=-earned_txn.points,
+                    transaction_type="adjusted",
+                    description=f"Reversed earned points for cancelled order #{order.id}",
+                ))
+
+            if order.points_redeemed > 0:
+                acct.points_balance += order.points_redeemed
+                acct.total_redeemed -= order.points_redeemed
+                db_session.add(LoyaltyTransaction(
+                    user_id=order.user_id,
+                    order_id=order.id,
+                    points=order.points_redeemed,
+                    transaction_type="adjusted",
+                    description=f"Refunded redeemed points for cancelled order #{order.id}",
+                ))
+            acct.updated_at = datetime.utcnow()
+            db_session.add(acct)
+
+            if order.coupon_code:
+                coupon = db_session.exec(
+                    select(Coupon).where(Coupon.code == order.coupon_code)
+                ).first()
+                if coupon and coupon.uses_count > 0:
+                    coupon.uses_count -= 1
+                    db_session.add(coupon)
+
+            order.status = "cancelled"
+            db_session.add(order)
+            db_session.commit()
+            db_session.refresh(order)
+            return order
+        except Exception as e:
+            logger.error("Error cancelling order %s: %s", order.id, e)
+            db_session.rollback()
+            raise

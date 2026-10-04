@@ -390,12 +390,12 @@ def test_update_order_status_not_found_returns_none():
 def test_update_order_status_updates_and_commits():
     from models.service.orders_service import OrderService
 
-    fake_order = MagicMock()
+    fake_order = MagicMock(status="confirmed")
     with patch("models.service.orders_service.db_session") as mock_db:
         mock_db.exec.return_value.first.return_value = fake_order
-        result = OrderService().update_order_status(uuid4(), uuid4(), "confirmed")
+        result = OrderService().update_order_status(uuid4(), uuid4(), "ready")
         assert result is fake_order
-        assert fake_order.status == "confirmed"
+        assert fake_order.status == "ready"
         mock_db.commit.assert_called_once()
         mock_db.refresh.assert_called_once_with(fake_order)
 

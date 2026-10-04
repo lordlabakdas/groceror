@@ -10,6 +10,7 @@ from models.db import db_session
 from models.entity.phone_verification import PhoneVerification
 from models.entity.user_entity import User
 from models.service.cart_service import CartService
+from models.service.inventory_reservation_service import InventoryReservationService
 
 cart_apis = APIRouter(prefix="/cart", tags=["cart"])
 
@@ -100,3 +101,30 @@ async def get_cart_total(
 ):
     cart = CartService(current_user).get_active_cart(store_id)
     return {"total_price": cart.total_price, "total_quantity": cart.total_quantity}
+
+
+@cart_apis.post("/{store_id}/reserve")
+async def reserve_cart(
+    store_id: UUID,
+    current_user: User = Depends(_get_user_profile),
+):
+    try:
+        return InventoryReservationService(current_user).reserve(store_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+
+
+@cart_apis.get("/{store_id}/reservation")
+async def get_cart_reservation(
+    store_id: UUID,
+    current_user: User = Depends(_get_user_profile),
+):
+    return InventoryReservationService(current_user).get(store_id)
+
+
+@cart_apis.delete("/{store_id}/reservation", status_code=status.HTTP_204_NO_CONTENT)
+async def release_cart_reservation(
+    store_id: UUID,
+    current_user: User = Depends(_get_user_profile),
+):
+    InventoryReservationService(current_user).release(store_id)

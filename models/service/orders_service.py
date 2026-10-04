@@ -1,6 +1,6 @@
 # models/service/orders_service.py
 import logging
-from datetime import date
+from datetime import date, datetime
 from math import floor
 from uuid import UUID, uuid4
 
@@ -10,11 +10,14 @@ from api.validators.order_validation import CreateOrderRequest
 from models.db import db_session
 from models.entity.coupon_entity import Coupon
 from models.entity.inventory_entity import Inventory
+from models.entity.inventory_reservation_entity import InventoryReservation
 from models.entity.loyalty_account_entity import LoyaltyAccount
 from models.entity.loyalty_transaction_entity import LoyaltyTransaction
 from models.entity.order_item_entity import OrderItem
 from models.entity.orders_entity import Order as OrderEntity
 from models.service.delivery_service import DeliveryService
+from models.service.inventory_reservation_service import InventoryReservationService
+from models.entity.cart_entity import CartEntity
 
 logger = logging.getLogger(__name__)
 
@@ -114,11 +117,24 @@ class OrderService:
         requested_qty: dict = {}
         for item in order.items:
             requested_qty[item.inventory_id] = requested_qty.get(item.inventory_id, 0) + item.quantity
+        cart = db_session.exec(select(CartEntity).where(
+            CartEntity.user_id == current_user.id,
+            CartEntity.store_id == store_id,
+            CartEntity.is_active == True,
+        )).first()
+        InventoryReservationService.expire_stale(cart.id if cart else None)
         for inv_id, qty in requested_qty.items():
             inv = inventory_map[inv_id]
-            if qty > inv.quantity:
+            reserved_elsewhere = db_session.exec(select(func.coalesce(func.sum(InventoryReservation.quantity), 0)).where(
+                InventoryReservation.inventory_id == inv_id,
+                InventoryReservation.status == "active",
+                InventoryReservation.expires_at > datetime.utcnow(),
+                InventoryReservation.user_id != current_user.id,
+            )).one()
+            available = inv.quantity - int(reserved_elsewhere or 0)
+            if qty > available:
                 raise ValueError(
-                    f"Insufficient stock for {inv.name}: requested {qty}, available {inv.quantity}"
+                    f"Insufficient stock for {inv.name}: requested {qty}, available {max(available, 0)}"
                 )
 
         original_subtotal = round(
@@ -244,6 +260,10 @@ class OrderService:
                 db_session.add(inventory_map[inv_id])
                 check_low_stock_alert(inv_id, inventory_map[inv_id].quantity, store_id)
 
+            InventoryReservationService.consume_for_order(
+                current_user.id, cart.id if cart else None, list(requested_qty.keys())
+            )
+
             # Increment coupon uses_count
             if coupon:
                 coupon.uses_count += 1
@@ -267,7 +287,7 @@ class OrderService:
             if points_earned > 0:
                 acct.points_balance += points_earned
                 acct.total_earned += points_earned
-                acct.updated_at = __import__("datetime").datetime.utcnow()
+                acct.updated_at = datetime.utcnow()
                 db_session.add(LoyaltyTransaction(
                     user_id=current_user.id,
                     order_id=order_id,

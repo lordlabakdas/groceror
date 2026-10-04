@@ -7,6 +7,18 @@ from pydantic import BaseModel, Field
 
 VALID_STATUSES = {"pending", "confirmed", "ready", "delivered", "cancelled"}
 
+# Legal next-states per current status (self-transitions always allowed, so a
+# store re-sending the same status is a no-op rather than a 400). Matches the
+# Orders module flow: confirmed -> ready -> delivered, with cancellation
+# possible any time before delivery. delivered/cancelled are terminal.
+ORDER_STATUS_TRANSITIONS = {
+    "pending": {"pending", "confirmed", "cancelled"},
+    "confirmed": {"confirmed", "ready", "cancelled"},
+    "ready": {"ready", "delivered", "cancelled"},
+    "delivered": {"delivered"},
+    "cancelled": {"cancelled"},
+}
+
 
 class OrderLineItem(BaseModel):
     inventory_id: UUID

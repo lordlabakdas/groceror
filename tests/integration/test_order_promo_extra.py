@@ -404,6 +404,96 @@ class TestUpdateOrderStatus:
         )
         assert r2.status_code == 404
 
+    def test_update_order_status_invalid_transition_rejected(
+        self, promo_user_token, promo_user_profile, promo_store_token, promo_inventory_id
+    ):
+        with patch("engine.mailer.Mailer.send"):
+            r = client.post(
+                "/order/create-order",
+                json={"items": [{"inventory_id": promo_inventory_id, "quantity": 1}]},
+                headers=_headers(promo_user_token),
+            )
+        assert r.status_code == 200, r.text
+        order_id = r.json()["id"]
+
+        # confirmed -> delivered is not a legal direct jump; must pass through "ready".
+        r2 = client.put(
+            f"/order/{order_id}/status",
+            json={"status": "delivered"},
+            headers=_headers(promo_store_token),
+        )
+        assert r2.status_code == 400
+        assert "Cannot transition" in r2.json()["detail"]
+
+    def test_cancel_order_restocks_inventory_and_reverses_loyalty_points(
+        self, promo_user_token, promo_user_profile, promo_store_token, promo_inventory_id
+    ):
+        def _quantity():
+            r = client.get(
+                "/inventory/get-store-inventory", headers=_headers(promo_store_token)
+            )
+            item = next(
+                i for i in r.json()["inventory"] if i["id"] == promo_inventory_id
+            )
+            return item["quantity"]
+
+        def _balance():
+            return client.get("/loyalty/balance", headers=_headers(promo_user_token)).json()
+
+        qty_before = _quantity()
+        balance_before = _balance()
+
+        with patch("engine.mailer.Mailer.send"):
+            r = client.post(
+                "/order/create-order",
+                json={"items": [{"inventory_id": promo_inventory_id, "quantity": 3}]},
+                headers=_headers(promo_user_token),
+            )
+        assert r.status_code == 200, r.text
+        order_id = r.json()["id"]
+        assert _quantity() == qty_before - 3
+
+        r2 = client.put(
+            f"/order/{order_id}/status",
+            json={"status": "cancelled"},
+            headers=_headers(promo_store_token),
+        )
+        assert r2.status_code == 200, r2.text
+        assert r2.json()["status"] == "cancelled"
+
+        # Stock fully restored and any loyalty points earned/redeemed on the
+        # cancelled order reversed — a cancellation leaves no side effects.
+        assert _quantity() == qty_before
+        balance_after = _balance()
+        assert balance_after["points_balance"] == balance_before["points_balance"]
+        assert balance_after["total_earned"] == balance_before["total_earned"]
+
+    def test_cancelled_order_is_terminal(
+        self, promo_user_token, promo_user_profile, promo_store_token, promo_inventory_id
+    ):
+        with patch("engine.mailer.Mailer.send"):
+            r = client.post(
+                "/order/create-order",
+                json={"items": [{"inventory_id": promo_inventory_id, "quantity": 1}]},
+                headers=_headers(promo_user_token),
+            )
+        assert r.status_code == 200, r.text
+        order_id = r.json()["id"]
+
+        r2 = client.put(
+            f"/order/{order_id}/status",
+            json={"status": "cancelled"},
+            headers=_headers(promo_store_token),
+        )
+        assert r2.status_code == 200, r2.text
+
+        r3 = client.put(
+            f"/order/{order_id}/status",
+            json={"status": "confirmed"},
+            headers=_headers(promo_store_token),
+        )
+        assert r3.status_code == 400
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Fixtures: featured-store tests

@@ -122,16 +122,20 @@ class OrderService:
             CartEntity.store_id == store_id,
             CartEntity.is_active == True,
         )).first()
-        InventoryReservationService.expire_stale(cart.id if cart else None)
+        reservation_cart = cart if isinstance(cart, CartEntity) and isinstance(cart.id, UUID) else None
+        if reservation_cart:
+            InventoryReservationService.expire_stale(reservation_cart.id)
         for inv_id, qty in requested_qty.items():
             inv = inventory_map[inv_id]
-            reserved_elsewhere = db_session.exec(select(func.coalesce(func.sum(InventoryReservation.quantity), 0)).where(
-                InventoryReservation.inventory_id == inv_id,
-                InventoryReservation.status == "active",
-                InventoryReservation.expires_at > datetime.utcnow(),
-                InventoryReservation.user_id != current_user.id,
-            )).one()
-            available = inv.quantity - int(reserved_elsewhere or 0)
+            available = inv.quantity
+            if reservation_cart:
+                reserved_elsewhere = db_session.exec(select(func.coalesce(func.sum(InventoryReservation.quantity), 0)).where(
+                    InventoryReservation.inventory_id == inv_id,
+                    InventoryReservation.status == "active",
+                    InventoryReservation.expires_at > datetime.utcnow(),
+                    InventoryReservation.user_id != current_user.id,
+                )).one()
+                available -= int(reserved_elsewhere or 0)
             if qty > available:
                 raise ValueError(
                     f"Insufficient stock for {inv.name}: requested {qty}, available {max(available, 0)}"
@@ -260,9 +264,10 @@ class OrderService:
                 db_session.add(inventory_map[inv_id])
                 check_low_stock_alert(inv_id, inventory_map[inv_id].quantity, store_id)
 
-            InventoryReservationService.consume_for_order(
-                current_user.id, cart.id if cart else None, list(requested_qty.keys())
-            )
+            if reservation_cart:
+                InventoryReservationService.consume_for_order(
+                    current_user.id, reservation_cart.id, list(requested_qty.keys())
+                )
 
             # Increment coupon uses_count
             if coupon:

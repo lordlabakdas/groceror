@@ -21,6 +21,7 @@ from engine.delivery import (
     Quote,
     get_delivery_provider,
 )
+from api.validators.order_validation import ORDER_STATUS_TRANSITIONS
 from models.db import db_session
 from models.entity.delivery_entity import Delivery
 from models.entity.delivery_zone_entity import DeliveryZone
@@ -164,8 +165,20 @@ class DeliveryService:
                 select(OrderEntity).where(OrderEntity.id == delivery.order_id)
             ).first()
             if order:
-                order.status = "delivered"
-                db_session.add(order)
+                if "delivered" in ORDER_STATUS_TRANSITIONS.get(order.status, set()):
+                    order.status = "delivered"
+                    db_session.add(order)
+                else:
+                    # A late/stale webhook arriving after the order was
+                    # cancelled (or some other state "delivered" can't
+                    # legally follow) must not silently resurrect it — that
+                    # would desync the restock/loyalty reversal cancellation
+                    # already did. Surface it instead of acting on it.
+                    logger.warning(
+                        "order_id=%s delivery webhook reported 'delivered' but "
+                        "order status is '%s' — not advancing",
+                        delivery.order_id, order.status,
+                    )
 
         db_session.commit()
         db_session.refresh(delivery)

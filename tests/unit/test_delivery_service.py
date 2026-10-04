@@ -179,7 +179,7 @@ def test_apply_webhook_update_marks_order_delivered():
 
     delivery = MagicMock()
     delivery.order_id = uuid4()
-    order = MagicMock()
+    order = MagicMock(status="ready")
 
     with patch("models.service.delivery_service.db_session") as mock_db:
         mock_db.exec.return_value.first.side_effect = iter([delivery, order])
@@ -197,6 +197,25 @@ def test_apply_webhook_update_marks_order_delivered():
         assert delivery.status == "delivered"
         assert delivery.rider_name == "Ravi"
         assert order.status == "delivered"
+
+
+def test_apply_webhook_update_does_not_resurrect_cancelled_order():
+    from models.service.delivery_service import DeliveryService
+
+    delivery = MagicMock()
+    delivery.order_id = uuid4()
+    order = MagicMock(status="cancelled")
+
+    with patch("models.service.delivery_service.db_session") as mock_db:
+        mock_db.exec.return_value.first.side_effect = iter([delivery, order])
+
+        result = DeliveryService().apply_webhook_update(
+            "vd_1", "delivered", None, None, None, raw_payload="{}"
+        )
+
+        assert result is delivery
+        assert delivery.status == "delivered"  # delivery row itself still updates
+        assert order.status == "cancelled"  # but the cancelled order is not resurrected
 
 
 def test_get_quote_rejects_outside_store_radius_before_calling_provider():

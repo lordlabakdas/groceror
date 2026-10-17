@@ -194,6 +194,18 @@ def get_profile(entity: PhoneVerification) -> dict:
         return {"name": None, "email": None, "location": None}
 
 
+MAX_OTP_ATTEMPTS = 5
+OTP_LOCKOUT_MINUTES = 15
+
+
+class OtpLockedError(Exception):
+    """Raised by _check_otp() when too many wrong guesses against the
+    current OTP have locked the phone out. A 6-digit OTP is a 1-in-a-million
+    guess, but with no attempt limit it's crackable within its 10-minute
+    validity window at a few hundred requests/sec — this bounds guesses per
+    issued OTP to MAX_OTP_ATTEMPTS instead."""
+
+
 def generate_otp(length: int = 6) -> str:
     """Generate a random OTP of specified length."""
     return ''.join(random.choices(string.digits, k=length))
@@ -212,6 +224,11 @@ def send_otp(phone: str) -> str:
         user.otp = otp
         user.otp_expires_at = expires_at
         user.is_phone_verified = False
+        # A freshly issued code gets its own fresh attempt budget — the
+        # lockout guards a specific OTP from being brute-forced, not the
+        # phone number permanently.
+        user.otp_attempts = 0
+        user.otp_locked_until = None
     else:
         user = PhoneVerification(
             phone=phone,
@@ -248,7 +265,10 @@ def _check_otp(phone: str, otp: str) -> Optional[PhoneVerification]:
     (matches, unexpired) for `phone`, else None. Shared by verify_otp() and
     reset_password() — both need the identical validity check; neither
     clears the OTP itself, so a caller that only wants to *check* validity
-    without consuming the code can call this directly."""
+    without consuming the code can call this directly.
+
+    Raises OtpLockedError if this phone has exceeded MAX_OTP_ATTEMPTS wrong
+    guesses against the current OTP and is still within the lockout window."""
     record = db_session.exec(
         select(PhoneVerification).where(PhoneVerification.phone == phone)
     ).first()
@@ -256,12 +276,26 @@ def _check_otp(phone: str, otp: str) -> Optional[PhoneVerification]:
     if not record or not record.otp:
         return None
 
+    if record.otp_locked_until and datetime.utcnow() < record.otp_locked_until:
+        raise OtpLockedError(
+            f"Too many incorrect attempts. Try again after "
+            f"{record.otp_locked_until.isoformat()}."
+        )
+
     if record.otp_expires_at and datetime.utcnow() > record.otp_expires_at:
         return None
 
     if record.otp != otp:
+        record.otp_attempts = (record.otp_attempts or 0) + 1
+        if record.otp_attempts >= MAX_OTP_ATTEMPTS:
+            record.otp_locked_until = datetime.utcnow() + timedelta(
+                minutes=OTP_LOCKOUT_MINUTES
+            )
+        db_session.commit()
         return None
 
+    record.otp_attempts = 0
+    record.otp_locked_until = None
     return record
 
 

@@ -27,6 +27,7 @@ if os.path.exists(_SQLITE_PATH):
 _config.DBConfig.DB_URL = _SQLITE_URL  # type: ignore[assignment]
 _config.JWTConfig.JWT_SECRET_KEY = "test-secret-key-padded-to-32-bytes!!"  # type: ignore[assignment]
 _config.TwilioConfig.ACCOUNT_SID = ""  # skip real SMS — send_sms falls back to stdout
+_config.AdminConfig.ADMIN_TOKEN = "test-admin-token-for-ci-only"  # type: ignore[assignment]
 
 from sqlmodel import create_engine as _ce, SQLModel, Session as _Session  # noqa: E402
 import models.db as _db  # noqa: E402

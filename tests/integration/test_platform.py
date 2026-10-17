@@ -16,6 +16,7 @@ from unittest.mock import patch
 
 import pytest
 
+from api.helpers import auth_helper
 from tests.integration.helpers import (
     PASSWORD,
     STORE_PHONE,
@@ -26,6 +27,7 @@ from tests.integration.helpers import (
     _register,
     _suffix,
     client,
+    get_test_otp,
 )
 
 
@@ -45,6 +47,52 @@ class TestAuth:
         r = client.post("/user/verify-otp", json={"phone": "+19990000002", "otp": "000000"})
         assert r.status_code == 400
         assert "Invalid or expired OTP" in r.json()["detail"]
+
+    def test_verify_otp_locks_out_after_max_attempts(self):
+        phone = "+19990000091"
+        client.post("/user/send-otp", json={"phone": phone})
+        for _ in range(auth_helper.MAX_OTP_ATTEMPTS):
+            r = client.post("/user/verify-otp", json={"phone": phone, "otp": "000000"})
+            assert r.status_code == 400
+
+        r = client.post("/user/verify-otp", json={"phone": phone, "otp": "000000"})
+        assert r.status_code == 429
+
+        # Even the real OTP is rejected while locked out.
+        otp = get_test_otp(phone)
+        r = client.post("/user/verify-otp", json={"phone": phone, "otp": otp})
+        assert r.status_code == 429
+
+    def test_reset_password_locks_out_after_max_attempts(self):
+        phone = "+19990000092"
+        client.post("/user/send-otp", json={"phone": phone})
+        for _ in range(auth_helper.MAX_OTP_ATTEMPTS):
+            r = client.post(
+                "/user/reset-password",
+                json={"phone": phone, "otp": "000000", "new_password": PASSWORD},
+            )
+            assert r.status_code == 400
+
+        r = client.post(
+            "/user/reset-password",
+            json={"phone": phone, "otp": "000000", "new_password": PASSWORD},
+        )
+        assert r.status_code == 429
+
+    def test_new_otp_grants_fresh_attempt_budget(self):
+        """A freshly requested OTP isn't blocked by a prior lockout against
+        an earlier code for the same phone."""
+        phone = "+19990000093"
+        client.post("/user/send-otp", json={"phone": phone})
+        for _ in range(auth_helper.MAX_OTP_ATTEMPTS):
+            client.post("/user/verify-otp", json={"phone": phone, "otp": "000000"})
+        r = client.post("/user/verify-otp", json={"phone": phone, "otp": "000000"})
+        assert r.status_code == 429
+
+        client.post("/user/send-otp", json={"phone": phone})
+        otp = get_test_otp(phone)
+        r = client.post("/user/verify-otp", json={"phone": phone, "otp": otp})
+        assert r.status_code == 200
 
     def test_register_without_otp_fails(self):
         """Phone that has never called send-otp cannot register."""

@@ -12,5 +12,7 @@ class PhoneVerification(SQLModel, table=True):
     is_phone_verified: bool = Field(default=False)
     otp: Optional[str] = None
     otp_expires_at: Optional[datetime] = None
+    otp_attempts: int = Field(default=0, nullable=False)
+    otp_locked_until: Optional[datetime] = None
     created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
     updated_at: datetime = Field(default_factory=datetime.utcnow, nullable=False) 

@@ -7,7 +7,8 @@ from fastapi import APIRouter, Depends, Header, HTTPException, status
 from pydantic import BaseModel
 from sqlmodel import select
 
-from config import AdminConfig, RazorpayConfig
+from api.helpers.admin_auth import require_admin_token
+from config import RazorpayConfig
 from helpers.jwt import auth_required
 from models.db import db_session
 from models.entity.phone_verification import PhoneVerification
@@ -28,8 +29,7 @@ async def _get_store(entity: PhoneVerification = Depends(auth_required)) -> Stor
 
 
 async def _require_admin(x_admin_token: str = Header(...)):
-    if x_admin_token != AdminConfig.ADMIN_TOKEN:
-        raise HTTPException(status_code=403, detail="Invalid admin token")
+    require_admin_token(x_admin_token)
 
 
 class SubscriptionStatusResponse(BaseModel):

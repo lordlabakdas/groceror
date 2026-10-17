@@ -246,12 +246,12 @@ async def activate_store(
 # ── Admin: store verification ───────────────────────────────────────────────
 
 from fastapi import Header
-from config import AdminConfig
+
+from api.helpers.admin_auth import require_admin_token
 
 
 async def _require_admin(x_admin_token: str = Header(...)):
-    if x_admin_token != AdminConfig.ADMIN_TOKEN:
-        raise HTTPException(status_code=403, detail="Invalid admin token")
+    require_admin_token(x_admin_token)
 
 
 @store_apis.post("/{store_id}/verify", status_code=200)

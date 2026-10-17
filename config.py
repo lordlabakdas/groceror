@@ -81,7 +81,9 @@ class TwilioConfig(object):
 
 @dataclass
 class AdminConfig(object):
-    ADMIN_TOKEN: ClassVar[str] = _env("ADMIN_TOKEN", "groceror-admin-secret")
+    # No hardcoded fallback: an unset ADMIN_TOKEN must lock admin routes out,
+    # never grant access via a guessable committed-to-git default.
+    ADMIN_TOKEN: ClassVar[str] = _env("ADMIN_TOKEN")
 
 
 @dataclass
